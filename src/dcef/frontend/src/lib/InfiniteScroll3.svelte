@@ -1,7 +1,8 @@
 <script lang="ts">
     import { onDestroy, onMount, tick, type Snippet } from "svelte";
-    import {throttle, debounce} from 'lodash-es';
+    import {debounce} from 'lodash-es';
     import { showJumpToPresent } from '../js/stores/settingsStore.svelte';
+    import FeedLoadingSkeleton from './message/FeedLoadingSkeleton.svelte';
 
     interface MyProps {
         fetchMessages: (direction: "before" | "after" | "around" | "first" | "last", messageId: string, limit: number) => Promise<any>
@@ -22,7 +23,7 @@
     let messages = $state<any[]>([])
     let prevPage = $state<string | null>(null)
     let nextPage = $state<string | null>(null)
-    let loadIsThrottled = false
+    let loadingDirection = $state<"initial" | "before" | "after" | null>("initial")
     let scrollDisabled = $state(true)
     let isLoading = $state(true)
     let stickToBottom = scrollToMessageId === "last"
@@ -44,75 +45,85 @@
         updatePresentState()
         debouncedPersistViewport()
 
-        if (loadIsThrottled) {
-            console.log('loadf throttled')
-            debouncedHandleScroll(event)
-            event.preventDefault()
+        if (loadingDirection !== null) {
             return
         }
         if (scrollDisabled) {
-            event.preventDefault()
             return
         }
         // if at the top of scroll container, load more messages before
         if (prevPage && scrollContainer.scrollTop === 0) {
             console.log('top reached')
-            loadIsThrottled = true
+            loadingDirection = "before"
             scrollDisabled = true
             const bottomOffset = scrollContainer.scrollHeight - scrollContainer.clientHeight
-            const moreMessagesObj = await fetchMessages("before", prevPage, MSGCOUNT_MORE)
-            const moreMessages = moreMessagesObj.messages
+            try {
+                const moreMessagesObj = await fetchMessages("before", prevPage, MSGCOUNT_MORE)
+                const moreMessages = moreMessagesObj.messages
 
+                // --- link previous messages ---
+                if (messages.length > 0 && moreMessages.length > 0) {
+                    // link the first message of the last batch to the last message of the previous batch
+                    preMessagesMapping.set(messages[0]._id, moreMessages[moreMessages.length - 1])
+                }
+                for (let i = 1; i < moreMessages.length; i++) {
+                    preMessagesMapping.set(moreMessages[i]._id, moreMessages[i - 1])
+                }
+                // --- end of previous message linking ---
 
-            // --- link previous messages ---
-            if (messages.length > 0 && moreMessages.length > 0) {
-                // link the first message of the last batch to the last message of the previous batch
-                preMessagesMapping.set(messages[0]._id, moreMessages[moreMessages.length - 1])
+                messages = [...moreMessages, ...messages]
+                prevPage = moreMessagesObj.prevPage
+                loadingDirection = null
+                await tick();  // wait for render
+
+                // restore the same bottom offset
+                let newScrollTop = scrollContainer.scrollHeight - scrollContainer.clientHeight - bottomOffset
+                scrollContainer.scrollTop = newScrollTop
             }
-            for (let i = 1; i < moreMessages.length; i++) {
-                preMessagesMapping.set(moreMessages[i]._id, moreMessages[i - 1])
+            catch (error) {
+                console.error("Unable to load older messages", error)
             }
-            // --- end of previous message linking ---
-
-            messages = [...moreMessages, ...messages]
-            prevPage = moreMessagesObj.prevPage
-            await tick();  // wait for render
-
-            // restore the same bottom offset
-            let newScrollTop = scrollContainer.scrollHeight - scrollContainer.clientHeight - bottomOffset
-            scrollContainer.scrollTop = newScrollTop
-            scrollDisabled = false
-            loadIsThrottled = false
+            finally {
+                loadingDirection = null
+                scrollDisabled = false
+            }
+            return
         }
         // if at the bottom of scroll container, load more messages after
         if (nextPage && scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 1) {
             console.log('bottom reached')
-            loadIsThrottled = true
+            loadingDirection = "after"
             scrollDisabled = true
-            const moreMessagesObj = await fetchMessages("after", nextPage, MSGCOUNT_MORE)
-            const moreMessages = moreMessagesObj.messages
+            try {
+                const moreMessagesObj = await fetchMessages("after", nextPage, MSGCOUNT_MORE)
+                const moreMessages = moreMessagesObj.messages
 
-            // --- link previous messages ---
-            if (messages.length > 0 && moreMessages.length > 0) {
-                // link the last message of the last batch to the first message of the next batch
-                preMessagesMapping.set(moreMessages[0]._id, messages[messages.length - 1])
-            }
-            for (let i = 1; i < moreMessages.length; i++) {
-                preMessagesMapping.set(moreMessages[i]._id, moreMessages[i - 1])
-            }
-            // --- end of previous message linking ---
+                // --- link previous messages ---
+                if (messages.length > 0 && moreMessages.length > 0) {
+                    // link the last message of the last batch to the first message of the next batch
+                    preMessagesMapping.set(moreMessages[0]._id, messages[messages.length - 1])
+                }
+                for (let i = 1; i < moreMessages.length; i++) {
+                    preMessagesMapping.set(moreMessages[i]._id, moreMessages[i - 1])
+                }
+                // --- end of previous message linking ---
 
-            messages = [...messages, ...moreMessages]
-            nextPage = moreMessagesObj.nextPage
-            scrollDisabled = false
-            loadIsThrottled = false
-            await tick()
-            updatePresentState()
-            debouncedPersistViewport()
+                messages = [...messages, ...moreMessages]
+                nextPage = moreMessagesObj.nextPage
+                loadingDirection = null
+                await tick()
+                updatePresentState()
+                debouncedPersistViewport()
+            }
+            catch (error) {
+                console.error("Unable to load newer messages", error)
+            }
+            finally {
+                loadingDirection = null
+                scrollDisabled = false
+            }
         }
     }
-    // debounce handleScroll
-    const debouncedHandleScroll = debounce(handleScroll, 250)
 
     function scrollToMessageIdF(messageId: string, offset: number | null = null) {
         if (!scrollContainer) {
@@ -313,34 +324,45 @@
     })
 
     onMount(async () => {
-        const newMessages = await fetchMessages("around", scrollToMessageId, MSGCOUNT_INITIAL)
-        messages = newMessages.messages
+        loadingDirection = "initial"
+        try {
+            const newMessages = await fetchMessages("around", scrollToMessageId, MSGCOUNT_INITIAL)
+            messages = newMessages.messages
 
-        rebuildPreviousMessageMapping()
+            rebuildPreviousMessageMapping()
 
-        prevPage = newMessages.prevPage
-        nextPage = newMessages.nextPage
-        await tick();  // wait for render
+            prevPage = newMessages.prevPage
+            nextPage = newMessages.nextPage
+            loadingDirection = null
+            await tick();  // wait for render
 
-        if (stickToBottom) {
-            enableBottomLock()
-        }
-        else if (scrollOffset !== null) {
-            enableViewportRestoreLock()
-        }
+            if (stickToBottom) {
+                enableBottomLock()
+            }
+            else if (scrollOffset !== null) {
+                enableViewportRestoreLock()
+            }
 
-        scrollToMessageIdF(scrollToMessageId, scrollOffset)
-        setTimeout(() => {
             scrollToMessageIdF(scrollToMessageId, scrollOffset)
-        }, 200)
-        setTimeout(() => {
-            scrollToMessageIdF(scrollToMessageId, scrollOffset)
+            setTimeout(() => {
+                scrollToMessageIdF(scrollToMessageId, scrollOffset)
+            }, 200)
+            setTimeout(() => {
+                scrollToMessageIdF(scrollToMessageId, scrollOffset)
+                scrollDisabled = false
+                persistViewport()
+            }, 500)
+        }
+        catch (error) {
+            console.error("Unable to load messages", error)
             scrollDisabled = false
-            persistViewport()
-        }, 500)
-        isLoading = false
-        isInitialized = true
-        updatePresentState()
+        }
+        finally {
+            loadingDirection = null
+            isLoading = false
+            isInitialized = true
+            updatePresentState()
+        }
     })
 
     onDestroy(() => {
@@ -366,6 +388,11 @@
             bind:this={scrollContainer}
         >
             <div class="scroll-content" bind:this={scrollContent}>
+                {#if loadingDirection === "initial"}
+                    <FeedLoadingSkeleton fillViewport={true} />
+                {:else if loadingDirection === "before"}
+                    <FeedLoadingSkeleton />
+                {/if}
                 {#if !prevPage && channelStartSnippet && messages && messages.length > 0}
                     {@render channelStartSnippet(messages[0])}
                 {/if}
@@ -374,6 +401,9 @@
                         {@render snippetMessage(message, preMessagesMapping.get(message._id, null))}
                     </div>
                 {/each}
+                {#if loadingDirection === "after"}
+                    <FeedLoadingSkeleton />
+                {/if}
             </div>
         </div>
         {#if $showJumpToPresent && jumpToPresentVisible}
@@ -398,6 +428,8 @@
     }
     .scroll-content {
         min-height: 100%;
+        display: flex;
+        flex-direction: column;
     }
     .scroll-container {
         flex: 1;

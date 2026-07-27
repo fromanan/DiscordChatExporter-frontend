@@ -1,7 +1,7 @@
 <script lang="ts">
     import { checkUrl } from '../../js/helpers';
     import type { Asset } from '../../js/interfaces';
-    import { resolveArchiveMediaKey } from '../../js/mediaArchive';
+    import { resolveArchiveMediaId } from '../../js/mediaArchive';
     import { getOfflineMediaUrl } from '../../js/stores/api';
     import { ensureOfflineMediaState, offlineMediaStates } from '../../js/stores/offlineMediaStore.svelte';
     import { getImagegalleryState } from './imagegalleryState.svelte';
@@ -27,21 +27,31 @@
     }
     let { assets = null, asset, inline = false, class: divclass = "", alt = "", clickable = true, aspectRatio = undefined, reserveSpace = false, fillContainer = false, showCloudIndicator = false, messageId = undefined, mediaKind = undefined, forceSpoiler = null, onerror = undefined, onload = undefined, ...otherProps}: MyProps = $props();
 	let manualSpoilerHidden = $state(false)
-	let isLoaded = $state(false)
-	let failedToLoad = $state(false)
-	let resolvedMediaKey = $state<string | null>(asset.mediaKey ?? null)
+	let resolvedMediaId = $state<number | null>(asset.mediaId ?? null)
 	let reloadAttempt = $state(0)
 	let mediaUrl = $derived(
-		resolvedMediaKey && $offlineMediaStates[resolvedMediaKey] === "offline"
-			? getOfflineMediaUrl(resolvedMediaKey, asset.filenameWithoutHash)
+		resolvedMediaId && $offlineMediaStates[String(resolvedMediaId)] === "offline"
+			? getOfflineMediaUrl(resolvedMediaId, asset.filenameWithoutHash)
 			: checkUrl(asset))
-	let resolvedAspectRatio = $derived(aspectRatio ?? (asset?.width && asset?.height ? `${asset.width} / ${asset.height}` : undefined))
+	let mediaIdentity = $derived(`${mediaUrl}:${reloadAttempt}`)
+	let loadedMediaIdentity = $state<string | null>(null)
+	let failedMediaIdentity = $state<string | null>(null)
+	let isLoaded = $derived(loadedMediaIdentity === mediaIdentity)
+	let failedToLoad = $derived(failedMediaIdentity === mediaIdentity)
+	let measuredWidth = $state<number | null>(null)
+	let measuredHeight = $state<number | null>(null)
+	let resolvedAspectRatio = $derived(
+		aspectRatio
+			?? (asset?.width && asset?.height ? `${asset.width} / ${asset.height}` : undefined)
+			?? (measuredWidth && measuredHeight ? `${measuredWidth} / ${measuredHeight}` : undefined))
 	let resolvedWidth = $derived.by(() => {
-		if (!asset?.width || !asset?.height) {
+		const width = asset?.width || measuredWidth
+		const height = asset?.height || measuredHeight
+		if (!width || !height) {
 			return undefined
 		}
 
-		return `min(${asset.width}px, 550px, ${(400 * asset.width) / asset.height}px, calc(100% - 20px))`
+		return `min(${width}px, 550px, ${(400 * width) / height}px, calc(100% - 20px))`
 	})
 	let isBlurred = $derived.by(()=> {
 		if (manualSpoilerHidden) {
@@ -58,12 +68,12 @@
 
 	$effect(() => {
 		let cancelled = false
-		void resolveArchiveMediaKey(asset, messageId, mediaKind)
-			.then(key => {
+		void resolveArchiveMediaId(asset, messageId, mediaKind)
+			.then(id => {
 				if (!cancelled) {
-					resolvedMediaKey = key
-					if (key) {
-						void ensureOfflineMediaState(key)
+					resolvedMediaId = id
+					if (id) {
+						void ensureOfflineMediaState(id)
 					}
 				}
 			})
@@ -87,19 +97,25 @@
 	}
 
 	function handleLoad(event: Event) {
-		isLoaded = true
-		failedToLoad = false
+		const image = event.currentTarget as HTMLImageElement
+		if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+			measuredWidth = image.naturalWidth
+			measuredHeight = image.naturalHeight
+		}
+		loadedMediaIdentity = mediaIdentity
+		failedMediaIdentity = null
 		onload?.(event)
 	}
 
 	function handleError(event: Event) {
-		failedToLoad = true
+		loadedMediaIdentity = null
+		failedMediaIdentity = mediaIdentity
 		onerror?.(event)
 	}
 
 	function retryMedia() {
-		isLoaded = false
-		failedToLoad = false
+		loadedMediaIdentity = null
+		failedMediaIdentity = null
 		reloadAttempt++
 	}
     const imagegalleryState = getImagegalleryState();
@@ -110,13 +126,22 @@
 	{#if showCloudIndicator}
 		<MediaArchiveIndicator {asset} {messageId} {mediaKind} />
 	{/if}
-	{#if !isLoaded && !failedToLoad}
-		<MediaLoadingSkeleton />
-	{:else if failedToLoad}
+	<MediaLoadingSkeleton active={!isLoaded && !failedToLoad} />
+	{#if failedToLoad}
 		<MediaLoadFailure onreload={retryMedia} />
 	{/if}
-	{#key `${mediaUrl}:${reloadAttempt}`}
+	{#if asset.thumbnailUrl}
 		<img
+			class="media-thumbnail"
+			class:hidden={isLoaded}
+			src={asset.thumbnailUrl}
+			alt=""
+			aria-hidden="true"
+		/>
+	{/if}
+	{#key mediaIdentity}
+		<img
+			class="media-full"
 			class:media-spoiler={isBlurred}
 			class:loaded={isLoaded}
 			src={mediaUrl}
@@ -138,12 +163,15 @@
 		overflow: hidden;
 		max-width: min(550px, 100%);
 		max-height: 400px;
+		background: #2b2d31;
 		img.media-spoiler {
 			filter: blur(100px);
 			cursor: pointer;
 		}
 
 		img {
+			position: relative;
+			z-index: 1;
 			display: block;
 			max-width: 100%;
 			width: auto;
@@ -151,6 +179,20 @@
 			object-fit: contain;
 			opacity: 0;
 			transition: opacity 120ms ease-out;
+		}
+
+		img.media-thumbnail {
+			position: absolute;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+			object-fit: contain;
+			opacity: 1;
+			transition: opacity 120ms ease-out;
+		}
+
+		img.media-thumbnail.hidden {
+			opacity: 0;
 		}
 
 		img.loaded {

@@ -118,7 +118,7 @@
             <i>This message was created in another server</i>
         </div>
     </div>
-<!-- if has reference id, but no reference message was found, the message was probably deleted before it was archived -->
+<!-- A missing referenced message is ambiguous: it may be deleted, uncaptured, or inaccessible. -->
 {:else if message.reference && message.reference.messageId}
     <div class="referenced">
         <div class="referenced-arrow" />
@@ -126,7 +126,11 @@
             <Icon name="reply/deleted" width={12} />
         </div>
         <div class="referenced-content">
-            <i>Original message was deleted</i>
+            <i>
+                {message.reference.isDeleted === true
+                    ? "Original message was deleted"
+                    : "Original message is unavailable"}
+            </i>
         </div>
     </div>
 {/if}
@@ -158,7 +162,7 @@
         height: 16px;
         border-radius: 50%;
 
-        /*style background for deleted referenced message*/
+        /* style background for a missing referenced message */
         background-color: #1E1F22;
         color: #909399;
         display: grid;

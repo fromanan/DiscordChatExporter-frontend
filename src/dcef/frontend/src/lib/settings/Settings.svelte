@@ -1,5 +1,5 @@
 <script>
-    import { nameRenderer, startingDayOfTheWeek, developerMode, online, gifs, linkHandler, channelScrollPosition, hideSpoilers, font, showCloudMediaIndicator, showJumpToPresent, timestampFormat, dateFormat, timeFormat, locale} from '../../js/stores/settingsStore.svelte';
+    import { nameRenderer, startingDayOfTheWeek, developerMode, online, gifs, linkHandler, channelScrollPosition, hideSpoilers, font, showCloudMediaIndicator, showJumpToPresent, showMessageBarPlaceholder, timestampFormat, dateFormat, timeFormat, locale} from '../../js/stores/settingsStore.svelte';
     import { dateFormats, timeFormats, formatMoment, browserLocales } from '../../js/time';
     import RadioButton from './RadioButton.svelte';
     import RadioGroup from './RadioGroup.svelte';
@@ -309,6 +309,10 @@
                     <ToggleSetting
                         title={"Show Jump to Present"}
                         bind:checked={$showJumpToPresent}
+                    />
+                    <ToggleSetting
+                        title={"Show Message Bar Placeholder"}
+                        bind:checked={$showMessageBarPlaceholder}
                     />
                 </RadioGroup>
             {/if}

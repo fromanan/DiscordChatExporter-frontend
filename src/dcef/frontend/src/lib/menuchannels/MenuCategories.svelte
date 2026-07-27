@@ -62,9 +62,6 @@
         width: 0px;
         height: 3px;
     }
-    .categories-wrapper:hover::-webkit-scrollbar {
-        width: 11px;
-    }
     .categories-wrapper::-webkit-scrollbar-thumb {
         height: 50px;
         background-color: #1a1b1e;

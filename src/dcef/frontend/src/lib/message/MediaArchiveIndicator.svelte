@@ -1,6 +1,6 @@
 <script lang="ts">
     import type { Asset } from "../../js/interfaces";
-    import { resolveArchiveMediaKey } from "../../js/mediaArchive";
+    import { resolveArchiveMediaId } from "../../js/mediaArchive";
     import {
         ensureOfflineMediaState,
         markOfflineMedia,
@@ -16,28 +16,27 @@
     }
 
     let { asset, messageId, mediaKind }: MyProps = $props();
-    let derivedMediaKey = $state<string | null>(null);
-    let mediaKey = $derived(asset.mediaKey ?? derivedMediaKey);
-    let indicatorState = $derived(asset.isOffline || $offlineMediaStates[mediaKey ?? ""] === "offline"
+    let resolvedMediaId = $state<number | null>(asset.mediaId ?? null);
+    let indicatorState = $derived(asset.isOffline || $offlineMediaStates[String(resolvedMediaId ?? "")] === "offline"
         ? "offline"
-        : $offlineMediaStates[mediaKey ?? ""] === "pending"
+        : $offlineMediaStates[String(resolvedMediaId ?? "")] === "pending"
             ? "pending"
             : "cloud");
 
     $effect(() => {
         let cancelled = false;
-        void resolveArchiveMediaKey(asset, messageId, mediaKind)
-            .then(key => {
+        void resolveArchiveMediaId(asset, messageId, mediaKind)
+            .then(id => {
                 if (cancelled) {
                     return;
                 }
-                derivedMediaKey = asset.mediaKey ? null : key;
-                if (key) {
+                resolvedMediaId = id;
+                if (id) {
                     if (asset.isOffline) {
-                        markOfflineMedia(key);
+                        markOfflineMedia(id);
                     }
                     else {
-                        void ensureOfflineMediaState(key);
+                        void ensureOfflineMediaState(id);
                     }
                 }
             });
@@ -50,13 +49,13 @@
     function archiveMedia(event: MouseEvent) {
         event.preventDefault();
         event.stopPropagation();
-        if (mediaKey && indicatorState === "cloud") {
-            void requestOfflineMedia([mediaKey]);
+        if (resolvedMediaId && indicatorState === "cloud") {
+            void requestOfflineMedia([resolvedMediaId]);
         }
     }
 </script>
 
-{#if $showCloudMediaIndicator && mediaKey}
+{#if $showCloudMediaIndicator && resolvedMediaId}
     <button
         class="media-archive-indicator"
         class:offline={indicatorState === "offline"}

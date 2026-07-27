@@ -1,22 +1,32 @@
 <script lang="ts">
     interface MyProps {
+        active?: boolean;
         label?: string;
         showLabel?: boolean;
     }
 
-    let { label = "Loading...", showLabel = false }: MyProps = $props();
+    let { active = true, label = "Loading...", showLabel = false }: MyProps = $props();
 </script>
 
-<div class="media-loading-skeleton" role="status" aria-label={label}>
-    <span class="spinner" aria-hidden="true"></span>
-    {#if showLabel}
-        <span class="label">{label}</span>
+<div
+    class="media-loading-skeleton"
+    class:active
+    role={active ? "status" : undefined}
+    aria-label={active ? label : undefined}
+    aria-hidden={active ? undefined : true}
+>
+    {#if active}
+        <span class="spinner" aria-hidden="true"></span>
+        {#if showLabel}
+            <span class="label">{label}</span>
+        {/if}
     {/if}
 </div>
 
 <style>
     .media-loading-skeleton {
         position: absolute;
+        z-index: 0;
         inset: 0;
         display: grid;
         place-content: center;
@@ -24,6 +34,11 @@
         overflow: hidden;
         border-radius: inherit;
         color: #b5bac1;
+        background: #2b2d31;
+        pointer-events: none;
+    }
+
+    .media-loading-skeleton.active {
         background: linear-gradient(110deg, #232428 8%, #303238 18%, #232428 33%);
         background-size: 200% 100%;
         animation: media-loading-shimmer 1.5s linear infinite;
@@ -51,8 +66,7 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
-        .media-loading-skeleton,
-        .spinner {
+        .media-loading-skeleton {
             animation: none;
         }
     }

@@ -18,7 +18,7 @@
         padding: 0 16px;
         height: 47px;
         font-weight: 600;
-        font-size: 15px;
+        font-size: 15.5px;
         line-height: 20px;
         top: 0;
         background-color: var(--panel-channels-bg);

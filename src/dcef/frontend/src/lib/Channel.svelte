@@ -3,6 +3,7 @@
     import { fetchMessages } from "../js/stores/api";
     import { getGuildState } from "../js/stores/guildState.svelte";
     import { getLayoutState } from "../js/stores/layoutState.svelte";
+    import { showMessageBarPlaceholder } from "../js/stores/settingsStore.svelte";
     import DateSeparator from "./DateSeparator.svelte";
     import InfiniteScroll3 from "./InfiniteScroll3.svelte";
     import ChannelStart from "./message/ChannelStart.svelte";
@@ -74,7 +75,9 @@
             {/key}
         {/if}
     </div>
-    <div class="message-composer-placeholder" aria-hidden="true"></div>
+    {#if $showMessageBarPlaceholder}
+        <div class="message-composer-placeholder" aria-hidden="true"></div>
+    {/if}
 </div>
 
 

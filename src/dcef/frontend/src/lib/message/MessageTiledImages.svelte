@@ -8,8 +8,9 @@
         onmediastatus?: (asset: Asset, status: "loaded" | "failed") => void;
         messageId?: string;
         mediaKind?: string;
+        showCloudIndicators?: boolean;
     }
-    let { images, isAttachment, onmediastatus = undefined, messageId = undefined, mediaKind = undefined}: MyProps = $props();
+    let { images, isAttachment, onmediastatus = undefined, messageId = undefined, mediaKind = undefined, showCloudIndicators = true}: MyProps = $props();
 
     function getAspectRatio(image: Asset): string | undefined {
         if (!image.width || !image.height) {
@@ -74,7 +75,7 @@
                     aspectRatio={getAspectRatio(image)}
                     reserveSpace={true}
                     fillContainer={imageGroup.length > 1 || images.length == 3}
-                    showCloudIndicator={true}
+                    showCloudIndicator={showCloudIndicators}
                     {messageId}
                     {mediaKind}
                     class="global-tiledimage {(imageGroup.length > 1 || images.length == 3) ? 'global-setaspectratio' : ''}"

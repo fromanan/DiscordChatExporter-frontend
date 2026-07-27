@@ -80,8 +80,8 @@ export function getGuildState() {
 			guild: guildId || null,
 			channel: channelId || null,
 			thread: threadId || null,
-			channelmessage: channelViewportMessageId || channelMessageId || null,
-			channeloffset: channelMessageOffset,
+			message: channelViewportMessageId || channelMessageId || null,
+			position: channelMessageOffset,
 			threadmessage: threadViewportMessageId || threadMessageId || null,
 			threadoffset: threadMessageOffset,
 			search: searchState.submittedSearchPrompt || null
@@ -90,6 +90,8 @@ export function getGuildState() {
 
 	function getUrlState() {
 		const urlParams = new URLSearchParams(window.location.search)
+		const normalizeDiscordId = (value: string) =>
+			/^\d+$/.test(value) ? value.padStart(24, "0") : value
 		const parseOffset = (name: string) => {
 			const value = urlParams.get(name)
 			if (value === null) {
@@ -102,11 +104,24 @@ export function getGuildState() {
 			guild: urlParams.get("guild") || null,
 			channel: urlParams.get("channel") || null,
 			thread: urlParams.get("thread") || null,
-			channelmessage: urlParams.get("channelmessage") || null,
-			channeloffset: parseOffset("channeloffset"),
+			message: urlParams.get("message") || null,
+			position: parseOffset("position"),
 			threadmessage: urlParams.get("threadmessage") || null,
 			threadoffset: parseOffset("threadoffset"),
 			search: urlParams.get("search") || null
+		}
+
+		const pathParts = window.location.pathname.split("/").filter(Boolean)
+		if (pathParts[0] === "channels" && (pathParts.length === 3 || pathParts.length === 4)) {
+			state.guild = normalizeDiscordId(decodeURIComponent(pathParts[1]))
+			state.channel = normalizeDiscordId(decodeURIComponent(pathParts[2]))
+			state.message = pathParts.length === 4
+				? normalizeDiscordId(decodeURIComponent(pathParts[3]))
+				: "last"
+			state.thread = null
+			state.threadmessage = null
+			state.threadoffset = null
+			state.search = null
 		}
 
 		// convert null strings to null values
@@ -137,6 +152,33 @@ export function getGuildState() {
 	}
 
 	/**
+	 * Use Discord-compatible paths for ordinary guild channel views. Keep the
+	 * query-string form for application states that do not have a Discord route.
+	 */
+	function stateToUrl(state) {
+		const formatDiscordId = (value: string) =>
+			/^\d+$/.test(value) ? (value.replace(/^0+/, "") || "0") : value
+		if (state.guild && state.channel && !state.thread && !state.search) {
+			const routeParts = [
+				"channels",
+				encodeURIComponent(formatDiscordId(state.guild)),
+				encodeURIComponent(formatDiscordId(state.channel))
+			]
+			if (state.message && state.message !== "last") {
+				routeParts.push(encodeURIComponent(formatDiscordId(state.message)))
+			}
+
+			const routeParams = stateToParams({
+				position: state.message && state.message !== "last" ? state.position : null
+			})
+			return `/${routeParts.join("/")}${routeParams ? `?${routeParams}` : ""}`
+		}
+
+		const getParams = stateToParams(state)
+		return `/${getParams ? `?${getParams}` : ""}`
+	}
+
+	/**
 	 * Pushes the current state to the browser history if it has changed
 	 */
 	async function pushState() {
@@ -146,8 +188,7 @@ export function getGuildState() {
 			console.log("router - no changes detected")
 			return
 		}
-		const getParams = stateToParams(state)
-		window.history.pushState(state, `${state.guildId} ${state.channelId}`, `/?${getParams}`)
+		window.history.pushState(state, `${state.guild} ${state.channel}`, stateToUrl(state))
 		console.log("router - pushed", state);
 	}
 
@@ -157,8 +198,7 @@ export function getGuildState() {
 	 */
 	async function replaceState() {
 		const state: any = _getStateObject()
-		const getParams = stateToParams(state)
-		window.history.replaceState(state, "", `/?${getParams}`)
+		window.history.replaceState(state, "", stateToUrl(state))
 		console.log("router - replaced", state);
 	}
 
@@ -259,10 +299,10 @@ export function getGuildState() {
 	async function comboSetGuildChannel(guildId: string, channelOrThreadId: string) {
         await changeGuildId(guildId)
         if (isChannel(channelOrThreadId)) {
-          await changeChannelId(channelOrThreadId, null)
+          await changeChannelId(channelOrThreadId, "last")
         }
         else if (isThread(channelOrThreadId)) {
-          await changeThreadId(channelOrThreadId, null)
+          await changeThreadId(channelOrThreadId, "last")
         }
 		else {
 		  console.warn("router - comboSetGuildChannel - channel or thread not exported", channelOrThreadId)
@@ -354,7 +394,7 @@ export function channelOrThreadIdToName(channelId: string) {
 
 async function restoreGuildState(state) {
 	await guildState.changeGuildId(state.guild);
-	await guildState.changeChannelId(state.channel, state.channelmessage, state.channeloffset);
+	await guildState.changeChannelId(state.channel, state.message, state.position);
 	await guildState.changeThreadId(state.thread, state.threadmessage, state.threadoffset);
 
 	await searchState.setSearchPrompt(state.search)

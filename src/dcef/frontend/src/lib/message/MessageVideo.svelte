@@ -1,7 +1,7 @@
 <script lang="ts">
     import { checkUrl } from "../../js/helpers";
     import type { Asset } from "../../js/interfaces";
-    import { resolveArchiveMediaKey } from "../../js/mediaArchive";
+    import { resolveArchiveMediaId } from "../../js/mediaArchive";
     import { getOfflineMediaUrl } from "../../js/stores/api";
     import {
         ensureOfflineMediaState,
@@ -18,21 +18,25 @@
         onmediastatus?: (asset: Asset, status: "loaded" | "failed") => void;
         messageId?: string;
         mediaKind?: string;
+        showArchiveIndicator?: boolean;
     }
 
-    let { attachment, onmediastatus = undefined, messageId, mediaKind }: MyProps = $props();
-    let resolvedMediaKey = $state<string | null>(attachment.mediaKey ?? null);
+    let { attachment, onmediastatus = undefined, messageId, mediaKind, showArchiveIndicator = true }: MyProps = $props();
+    let resolvedMediaId = $state<number | null>(attachment.mediaId ?? null);
     let reloadAttempt = $state(0);
     let mediaUrl = $derived(
-        resolvedMediaKey && $offlineMediaStates[resolvedMediaKey] === "offline"
-            ? getOfflineMediaUrl(resolvedMediaKey, attachment.filenameWithoutHash)
+        resolvedMediaId && $offlineMediaStates[String(resolvedMediaId)] === "offline"
+            ? getOfflineMediaUrl(resolvedMediaId, attachment.filenameWithoutHash)
             : checkUrl(attachment));
+    let mediaIdentity = $derived(`${mediaUrl}:${reloadAttempt}`);
+    let loadedMediaIdentity = $state<string | null>(null);
+    let failedMediaIdentity = $state<string | null>(null);
+    let isLoaded = $derived(loadedMediaIdentity === mediaIdentity);
+    let failedToLoad = $derived(failedMediaIdentity === mediaIdentity);
     const audioplayerState = getAudioplayerState();
 
     let wrapper: HTMLDivElement;
     let video: HTMLVideoElement;
-    let isLoaded = $state(false);
-    let failedToLoad = $state(false);
     let metadataWidth = $state<number | null>(attachment.width ?? null);
     let metadataHeight = $state<number | null>(attachment.height ?? null);
     let paused = $state(true);
@@ -48,12 +52,12 @@
 
     $effect(() => {
         let cancelled = false;
-        void resolveArchiveMediaKey(attachment, messageId, mediaKind)
-            .then(key => {
+        void resolveArchiveMediaId(attachment, messageId, mediaKind)
+            .then(id => {
                 if (!cancelled) {
-                    resolvedMediaKey = key;
-                    if (key) {
-                        void ensureOfflineMediaState(key);
+                    resolvedMediaId = id;
+                    if (id) {
+                        void ensureOfflineMediaState(id);
                     }
                 }
             });
@@ -63,8 +67,8 @@
     });
 
     function retryMedia() {
-        isLoaded = false;
-        failedToLoad = false;
+        loadedMediaIdentity = null;
+        failedMediaIdentity = null;
         paused = true;
         ended = false;
         hasStarted = false;
@@ -198,15 +202,16 @@
     onpointerleave={hideControls}
     onfullscreenchange={() => isFullscreen = document.fullscreenElement === wrapper}
 >
-    <MediaArchiveIndicator asset={attachment} {messageId} {mediaKind} />
-    {#if !isLoaded && !failedToLoad}
-        <MediaLoadingSkeleton />
-    {:else if failedToLoad}
+    {#if showArchiveIndicator}
+        <MediaArchiveIndicator asset={attachment} {messageId} {mediaKind} />
+    {/if}
+    <MediaLoadingSkeleton active={!isLoaded && !failedToLoad} />
+    {#if failedToLoad}
         <MediaLoadFailure onreload={retryMedia} />
     {/if}
 
     <div class="video-surface" class:media-spoiler={attachment.filenameWithoutHash.startsWith("SPOILER")}>
-        {#key `${mediaUrl}:${reloadAttempt}`}
+        {#key mediaIdentity}
             <!-- Archived attachments do not include a separate captions track. -->
             <!-- svelte-ignore a11y_media_has_caption -->
             <video
@@ -214,12 +219,13 @@
                 class="message-video"
                 class:loaded={isLoaded}
                 preload="metadata"
+                poster={attachment.thumbnailUrl}
                 playsinline
                 onclick={togglePlayback}
                 onloadedmetadata={captureMetadata}
                 onloadeddata={() => {
-                    isLoaded = true;
-                    failedToLoad = false;
+                    loadedMediaIdentity = mediaIdentity;
+                    failedMediaIdentity = null;
                     onmediastatus?.(attachment, "loaded");
                 }}
                 onplay={handlePlay}
@@ -232,7 +238,8 @@
                 onprogress={updateBuffered}
                 onvolumechange={() => muted = video.muted}
                 onerror={() => {
-                    failedToLoad = true;
+                    loadedMediaIdentity = null;
+                    failedMediaIdentity = mediaIdentity;
                     onmediastatus?.(attachment, "failed");
                 }}
             >
@@ -328,7 +335,7 @@
         overflow: hidden;
         border-radius: 10px;
         max-width: min(550px, 100%);
-        background: #000;
+        background: #2b2d31;
     }
 
     .video-surface {
@@ -336,9 +343,12 @@
         width: 100%;
         height: 100%;
         overflow: hidden;
+        z-index: 1;
     }
 
     .message-video {
+        position: relative;
+        z-index: 1;
         display: block;
         width: 100%;
         height: 100%;
@@ -352,6 +362,10 @@
 
     .message-video.loaded {
         opacity: 1;
+    }
+
+    .spoiler-wrapper:not(.loading):not(.failed) {
+        background: #000;
     }
 
     .download-video,

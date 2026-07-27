@@ -9,6 +9,9 @@
     import MessageVideo from "./MessageVideo.svelte";
     import MediaLoadingSkeleton from "./MediaLoadingSkeleton.svelte";
     import MediaArchiveIndicator from "./MediaArchiveIndicator.svelte";
+    import { isDirectGifEmbed } from "../../js/directGifEmbeds";
+    import { getExternalVideoEmbed } from "../../js/externalVideoProviders";
+    import { isEmbedMediaArchivingExcluded } from "../../js/embedMediaArchiveExclusions";
 
     interface MyProps {
         embed: Embed;
@@ -44,8 +47,11 @@
     })
 
     let playingVideo: boolean = $state(false)
-	let gifvLoaded = $state(false)
-	let gifvFailedToLoad = $state(false)
+	let gifvUrl = $derived(embed.video ? checkUrl(embed.video) : "")
+	let loadedGifvUrl = $state<string | null>(null)
+	let failedGifvUrl = $state<string | null>(null)
+	let gifvLoaded = $derived(gifvUrl !== "" && loadedGifvUrl === gifvUrl)
+	let gifvFailedToLoad = $derived(gifvUrl !== "" && failedGifvUrl === gifvUrl)
 	let gifvAspectRatio = $derived(`${embed.video?.width ?? 16} / ${embed.video?.height ?? 9}`)
 	let gifvWidth = $derived(embed.video?.width && embed.video?.height
 		? `min(${embed.video.width}px, 550px, ${(400 * embed.video.width) / embed.video.height}px, calc(100% - 20px))`
@@ -57,21 +63,13 @@
     const spotifyRegex = /https:\/\/open\.spotify\.com\/track\/([a-zA-Z0-9]+)/
     let spotifyId = $derived(embed.url?.match(spotifyRegex)?.[1] ?? null)
 
-    const youtubeRegex = /^(?:https?:)?\/\/(?:www|m)\.(?:youtube(?:-nocookie)?\.com|youtu.be)\/(?:[\w\-]+\?v=|embed\/|live\/|v\/)?[\w\-]+/
-	let youtubeId = $derived(embed.url?.match(youtubeRegex)?.[0]?.split('v=')?.[1]?.split('&')?.[0] ?? null);
-
-    const twitchClipRegex = /(?:https:\/\/)?clips\.twitch\.tv\/(\S+)/i
-    let twitchClipId = $derived(embed.url?.match(twitchClipRegex)?.[1] ?? null)
+    let externalVideo = $derived(getExternalVideoEmbed(embed.url))
+    let hasPlayableVideo = $derived(Boolean(externalVideo || embed.video))
+    let archiveMediaExcluded = $derived(isEmbedMediaArchivingExcluded(embed))
 
     const tenorRegex = /(?:https?:)?\/\/(?:www\.)?(?:tenor\.com)\/(?:view|watch)\/[%\w\-]+-(\d+)/
     let tenorId = $derived(embed.url?.match(tenorRegex)?.[1] ?? null)
-    let isGifv = $derived(
-        Boolean(embed.video) &&
-        (
-            Boolean(tenorId) ||
-            /^https?:\/\/(?:www\.)?giphy\.com\//i.test(embed.url ?? "")
-        )
-    )
+    let isGifv = $derived(isDirectGifEmbed(embed))
 
     let smallThumbnail: boolean = $derived.by(() => {
         if (spotifyId) {
@@ -108,12 +106,27 @@
     {#if isGifv}
         {#if embed.video}
             <div class="gifv-wrapper" style:aspect-ratio={gifvAspectRatio} style:width={gifvWidth}>
-                <MediaArchiveIndicator asset={embed.video} {messageId} mediaKind="embed-video" />
-                {#if !gifvLoaded && !gifvFailedToLoad}
-                    <MediaLoadingSkeleton />
+                {#if !archiveMediaExcluded}
+                    <MediaArchiveIndicator asset={embed.video} {messageId} mediaKind="embed-video" />
                 {/if}
-                <video class="videogif" class:loaded={gifvLoaded || gifvFailedToLoad} src="{checkUrl(embed.video)}" autoplay loop muted playsinline onloadeddata={() => gifvLoaded = true} onerror={() => gifvFailedToLoad = true}/>
-                <span class="gif-badge">GIF</span>
+                <MediaLoadingSkeleton active={!gifvLoaded && !gifvFailedToLoad} />
+                <video
+                    class="videogif"
+                    class:loaded={gifvLoaded || gifvFailedToLoad}
+                    src={gifvUrl}
+                    autoplay
+                    loop
+                    muted
+                    playsinline
+                    onloadeddata={() => {
+                        loadedGifvUrl = gifvUrl
+                        failedGifvUrl = null
+                    }}
+                    onerror={() => {
+                        loadedGifvUrl = null
+                        failedGifvUrl = gifvUrl
+                    }}
+                />
             </div>
         {:else}
             <!-- workaround for older exports (embed tenor iframe) -->
@@ -124,15 +137,13 @@
     {:else if spotifyId}
         <iframe class="spotify-iframe" src={`https://open.spotify.com/embed/track/${spotifyId}`} frameborder="0" sandbox="allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts" style="width: 400px; height: 80px;"></iframe>
     {:else if embed.video && embed.title === "" && embed.description === ""}
-        <MessageVideo attachment={embed.video} {messageId} mediaKind="embed-video" />
+        <MessageVideo attachment={embed.video} {messageId} mediaKind="embed-video" showArchiveIndicator={!archiveMediaExcluded} />
     {:else}
         <div class="embed" class:smallthumbnail={smallThumbnail} style="border-left: {embed.color} 4px solid;">
             <div class="header-row">
                 <div class="header-col">
-                    {#if youtubeId}
-                        <div class="website-name">YouTube</div>
-                    {:else if twitchClipId}
-                        <div class="website-name">Twitch</div>
+                    {#if externalVideo}
+                        <div class="website-name">{externalVideo.name}</div>
                     {/if}
                     {#if embed.author}
                         <div class="author-name">
@@ -151,7 +162,7 @@
                         {/if}
                     </div>
 
-                    {#if !twitchClipId}
+                    {#if externalVideo?.name !== "Twitch"}
                         <div class="description">
                             <MessageMarkdown content={embed.description} />
                         </div>
@@ -174,14 +185,13 @@
                 {#if embed.thumbnail && !playingVideo}
                     <div class="thumb-col">
                         <div class="thumbnail-wrapper">
-                            <Image asset={embed.thumbnail} reserveSpace={true} showCloudIndicator={true} {messageId} mediaKind="embed-thumbnail" forceSpoiler={messageState.messageContentLinkIsSpoilered} class="global-embedthumb" />
-                            {#if embed.video}
+                            <Image asset={embed.thumbnail} reserveSpace={true} showCloudIndicator={!archiveMediaExcluded} {messageId} mediaKind="embed-thumbnail" forceSpoiler={messageState.messageContentLinkIsSpoilered} class="global-embedthumb" />
+                            {#if hasPlayableVideo}
                                 <div class="pill">
-                                    {#if twitchClipId || youtubeId}
-                                        <button class="icon" onclick={playVideo}>
-                                            <Icon name="player/play" width={24} />
-                                        </button>
-                                    {/if}
+                                    <button class="icon" onclick={playVideo}>
+                                        <Icon name="player/play" width={24} />
+                                        <span class="visually-hidden">Play video</span>
+                                    </button>
                                     <a class="icon" href={embed.url} target="_blank" rel="noopener noreferrer">
                                         <Icon name="player/openLink" width={24} />
                                     </a>
@@ -193,22 +203,27 @@
 
                 {#if !embed.thumbnail && embed.video}
                     <div class="embed-video-2">
-                        <MessageVideo attachment={embed.video} {messageId} mediaKind="embed-video" />
+                        <MessageVideo attachment={embed.video} {messageId} mediaKind="embed-video" showArchiveIndicator={!archiveMediaExcluded} />
                     </div>
                 {/if}
 
                 {#if playingVideo}
-                    {#if twitchClipId}
-                        <iframe
-                            class="twitch-iframe"
-                            allow="autoplay" frameborder="0" scrolling="no" sandbox="allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts" provider="Twitch"
-                            src="https://clips.twitch.tv/embed?clip={twitchClipId}&parent={window.location.hostname}"
-                            width="400" height="232" allowfullscreen="">
-                        </iframe>
-                    {:else if youtubeId}
-                        <!-- won't autoplay with sponsorblock browser extension for some reason -->
-                        <div class="youtube-video-container">
-                            <iframe class="chatlog__embed-youtube" src="http://www.youtube.com/embed/{youtubeId}?rel=0&modestbranding=1&autohide=1&mute=0&showinfo=0&controls=1&autoplay=1" width="400" height="225" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen frameborder="0" scrolling="no" sandbox="allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"></iframe>
+                    {#if externalVideo}
+                        <div class="provider-video-container" style:aspect-ratio={`${embed.video?.width ?? embed.thumbnail?.width ?? 16} / ${embed.video?.height ?? embed.thumbnail?.height ?? 9}`}>
+                            <!-- Provider URLs are constructed from an allow-list in externalVideoProviders.ts. -->
+                            <iframe
+                                title={`${externalVideo.name} video player`}
+                                src={externalVideo.src}
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                                frameborder="0"
+                                scrolling="no"
+                                sandbox="allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-presentation allow-same-origin allow-scripts"
+                                allowfullscreen
+                            ></iframe>
+                        </div>
+                    {:else if embed.video}
+                        <div class="embed-video-2">
+                            <MessageVideo attachment={embed.video} {messageId} mediaKind="embed-video" showArchiveIndicator={!archiveMediaExcluded} />
                         </div>
                     {/if}
                 {/if}
@@ -216,7 +231,7 @@
 
             {#if embed.images.length > 0}
                 <div class="image-embeds-wrapper">
-                    <MessageTiledImages images={embed.images} isAttachment={false} {messageId} mediaKind="embed-image" />
+                    <MessageTiledImages images={embed.images} isAttachment={false} {messageId} mediaKind="embed-image" showCloudIndicators={!archiveMediaExcluded} />
                 </div>
             {/if}
 
@@ -227,7 +242,10 @@
                         {#if embed.footer.icon && !footerIconFailedToLoad}
                             <img class="footer-icon" src={checkUrl(embed.footer.icon)} alt="" width="20" height="20" onerror={onFooterIconError} />
                         {/if}
-                        <span class="footer-text">{embed.footer?.text}</span><span class="footer-separator">•</span><span class="footer-timestamp">{renderTimestamp(embed.timestamp)}</span>
+                        <span class="footer-text">{embed.footer?.text}</span>
+                        {#if embed.timestamp}
+                            <span class="footer-separator">•</span><span class="footer-timestamp">{renderTimestamp(embed.timestamp)}</span>
+                        {/if}
                     </div>
                 </div>
             {/if}
@@ -236,15 +254,18 @@
 </div>
 
 <style>
-    .youtube-video-container {
+    .provider-video-container {
         margin-top: 16px;
 		position: relative;
 		width: 100%;
-		height: 0;
-		padding-bottom: 56.25%;
+        max-width: 400px;
+        max-height: 400px;
+        overflow: hidden;
+        border-radius: 3px;
+        background: #000;
 	}
 
-	.youtube-video-container iframe {
+	.provider-video-container iframe {
 		position: absolute;
 		top: 0;
 		left: 0;
@@ -252,6 +273,8 @@
 		height: 100%;
 	}
     .videogif {
+        position: relative;
+        z-index: 1;
         max-width: min(550px, 100%);
 		max-height: 400px;
         width: 100%;
@@ -268,19 +291,9 @@
         width: fit-content;
         max-width: min(550px, 100%);
 		max-height: 400px;
-    }
-    .gif-badge {
-        position: absolute;
-        top: 8px;
-        left: 8px;
-        padding: 2px 5px;
-        border-radius: 3px;
-        background: rgba(30, 31, 34, 0.85);
-        color: #f2f3f5;
-        font-size: 14px;
-        font-weight: 700;
-        line-height: 20px;
-        pointer-events: none;
+        overflow: hidden;
+        border-radius: 4px;
+        background: #2b2d31;
     }
     .embed-tenor-container {
 		pointer-events: none;
@@ -299,6 +312,18 @@
 
     .main-wrapper {
         padding: 2px 0;
+    }
+
+    .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
     }
 
     .embed {
@@ -414,14 +439,6 @@
                     }
                 }
             }
-        }
-
-        .twitch-iframe {
-            margin-top: 16px;
-            width: 100%;
-            border-radius: 3px;
-            max-width: 400px;
-            max-height: 232px;
         }
 
         .fields {

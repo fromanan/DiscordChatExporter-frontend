@@ -30,6 +30,15 @@ export interface Asset {
 	sizeBytes: number;
 	filenameWithHash: string;
 	filenameWithoutHash: string;
+	mediaId?: number;
+	fileId?: number;
+	thumbnailMediaId?: number;
+	thumbnailFileId?: number;
+	cachedThumbnailFileId?: number;
+	thumbnailUrl?: string;
+	originalUrl?: string;
+	discordUrl?: string;
+	/** Legacy archive metadata retained for old exports. */
 	mediaKey?: string;
 	isOffline?: boolean;
 	colorDominant: null | [number, number, number];
@@ -105,6 +114,7 @@ export interface Mention {
 }
 
 export interface Embed {
+	type?: string;
 	title: string;
 	url: string;
 	timestamp: string | null;
@@ -129,6 +139,29 @@ export interface Embed {
 		text: string;
 		icon: Asset;
 	};
+	mediaContext?: EmbedMediaContext[];
+}
+
+export interface EmbedMediaContext {
+	id: number;
+	role: string;
+	ordinal: number;
+	originalUrl?: string;
+	canonicalUrl?: string;
+	discordUrl?: string;
+	mediaId?: number;
+	fileId?: number;
+	thumbnailMediaId?: number;
+	thumbnailFileId?: number;
+	cachedThumbnailFileId?: number;
+	providerName?: string;
+	title?: string;
+	description?: string;
+	discordMediaId?: string;
+	declaredContentType?: string;
+	width?: number;
+	height?: number;
+	source?: string;
 }
 
 export interface InvitePreview {
@@ -191,6 +224,7 @@ export interface Message {
 	timestampEdited: string | null;
 	callEndedTimestamp: string | null;
 	isPinned: boolean;
+	isDeleted?: boolean;
 	content: MessageContent[];
 	author: Author;
 	stickers: Sticker[] | null;
@@ -205,6 +239,7 @@ export interface Message {
 		messageId: string;
 		channelId: string;
 		guildId: string | null;
+		isDeleted?: boolean | null;
 		message?: Message | null;
 	} | null;
 	referencedMessage?: Message | null;

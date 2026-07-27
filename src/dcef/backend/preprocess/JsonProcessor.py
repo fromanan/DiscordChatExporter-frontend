@@ -2,12 +2,10 @@
 
 import copy
 import functools
-import hashlib
 from itertools import zip_longest
 import os
 import ijson
 from pprint import pprint
-from urllib.parse import urlsplit
 
 from pymongo import ReplaceOne, UpdateOne
 
@@ -34,27 +32,23 @@ class JsonProcessor:
 
 	@staticmethod
 	def restore_archive_media_metadata(source_asset: dict, processed_asset: dict, message_id: str, media_kind: str):
-		if "mediaKey" in source_asset:
-			processed_asset["mediaKey"] = source_asset["mediaKey"]
-		if "isOffline" in source_asset:
-			processed_asset["isOffline"] = source_asset["isOffline"]
-
-		if "mediaKey" in processed_asset:
-			return
-
-		source_url = source_asset.get("canonicalUrl") or source_asset.get("url")
-		if not source_url:
-			return
-
-		parsed = urlsplit(source_url)
-		if parsed.hostname not in ("media.discordapp.net", "cdn.discordapp.com"):
-			return
-
-		normalized_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-		unpadded_message_id = message_id.lstrip("0") or "0"
-		hash_input = f"{unpadded_message_id}|{media_kind}|{normalized_url}"
-		processed_asset["mediaKey"] = f"url:{hashlib.sha256(hash_input.encode('utf-8')).hexdigest()}"
-		processed_asset["isOffline"] = False
+		for field in (
+			"mediaId",
+			"fileId",
+			"thumbnailMediaId",
+			"thumbnailFileId",
+			"cachedThumbnailFileId",
+			"thumbnailUrl",
+			"originalUrl",
+			"canonicalUrl",
+			"discordUrl",
+			"isOffline",
+			# Retain legacy metadata when importing an older export, but never
+			# synthesize a media key for new archives.
+			"mediaKey",
+		):
+			if field in source_asset:
+				processed_asset[field] = source_asset[field]
 
 	def process_guild(self, guild):
 		guild["_id"] = Formatters.pad_id(guild.pop("id"))
@@ -252,11 +246,8 @@ class JsonProcessor:
 					if "id" in attachment:
 						new_attachment["id"] = attachment["id"]
 
-					if "mediaKey" in attachment:
-						new_attachment["mediaKey"] = attachment["mediaKey"]
-
-					if "isOffline" in attachment:
-						new_attachment["isOffline"] = attachment["isOffline"]
+					self.restore_archive_media_metadata(
+						attachment, new_attachment, message["_id"], "attachment")
 
 					if original_width is not None and original_height is not None:
 						new_attachment["width"] = original_width

@@ -4,16 +4,19 @@ const ARCHIVE_API_BASE_URL = import.meta.env.VITE_ARCHIVE_API_BASE_URL ?? "http:
 
 export type OfflineMediaArchiveResult = "succeeded" | "persisted-view-update-deferred" | "pending" | "failed";
 
-export function getOfflineMediaUrl(mediaKey: string, fileName?: string): string {
-    const encodedKey = encodeURIComponent(mediaKey);
+export function getOfflineMediaUrl(mediaId: number, fileName?: string): string {
     return fileName
-        ? `${ARCHIVE_API_BASE_URL}/media/${encodedKey}/${encodeURIComponent(fileName)}`
-        : `${ARCHIVE_API_BASE_URL}/media/${encodedKey}`;
+        ? `${ARCHIVE_API_BASE_URL}/media/${mediaId}/${encodeURIComponent(fileName)}`
+        : `${ARCHIVE_API_BASE_URL}/media/${mediaId}`;
 }
 
-export async function hasOfflineMedia(mediaKey: string): Promise<boolean> {
+export function getOfflineMediaThumbnailUrl(mediaId: number): string {
+    return `${ARCHIVE_API_BASE_URL}/media/${mediaId}/thumbnail.webp`;
+}
+
+export async function hasOfflineMedia(mediaId: number): Promise<boolean> {
     try {
-        const response = await fetch(getOfflineMediaUrl(mediaKey), {
+        const response = await fetch(getOfflineMediaUrl(mediaId), {
             headers: { Range: "bytes=0-0" },
             cache: "no-store"
         });
@@ -24,10 +27,10 @@ export async function hasOfflineMedia(mediaKey: string): Promise<boolean> {
     }
 }
 
-export async function archiveOfflineMedia(mediaKey: string): Promise<OfflineMediaArchiveResult> {
+export async function archiveOfflineMedia(mediaId: number): Promise<OfflineMediaArchiveResult> {
     try {
         const response = await fetch(
-            `${ARCHIVE_API_BASE_URL}/media/${encodeURIComponent(mediaKey)}/offline`,
+            `${ARCHIVE_API_BASE_URL}/media/${mediaId}/offline`,
             { method: "POST" });
         const payload = await response.json();
         if (payload.status === "succeeded"

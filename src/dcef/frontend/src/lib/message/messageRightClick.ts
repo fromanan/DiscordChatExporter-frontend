@@ -4,6 +4,7 @@ import type { Asset, Author, Message } from "../../js/interfaces"
 import { contextMenuItems } from "../../js/stores/menuStore"
 import { linkHandler, setCurrentUser } from "../../js/stores/settingsStore.svelte"
 import { isOfflineMediaComplete, isOfflineMediaPending, requestOfflineMedia } from "../../js/stores/offlineMediaStore.svelte"
+import { isEmbedMediaArchivingExcluded } from "../../js/embedMediaArchiveExclusions"
 
 export function onUserRightClick(e, author: Author) {
     contextMenuItems.set([
@@ -24,20 +25,22 @@ export function onUserRightClick(e, author: Author) {
 
 
 export function onMessageRightClick(e, message: Message) {
-    const embedMedia = (message.embeds ?? []).flatMap(embed =>
-        [embed.thumbnail, embed.image, embed.video, ...(embed.images ?? [])]
-            .filter((asset): asset is Asset => Boolean(asset)));
-    const offlineMediaKeys = [...new Set(
+    const embedMedia = (message.embeds ?? [])
+        .filter(embed => !isEmbedMediaArchivingExcluded(embed))
+        .flatMap(embed =>
+            [embed.thumbnail, embed.image, embed.video, ...(embed.images ?? [])]
+                .filter((asset): asset is Asset => Boolean(asset)));
+    const offlineMediaIds = [...new Set(
         [...(message.attachments ?? []), ...embedMedia]
-            .filter(attachment => attachment.mediaKey
+            .filter(attachment => attachment.mediaId
                 && !attachment.isOffline
-                && !isOfflineMediaComplete(attachment.mediaKey))
-            .map(attachment => attachment.mediaKey as string))];
-    const offlineMediaPending = offlineMediaKeys.some(isOfflineMediaPending);
+                && !isOfflineMediaComplete(attachment.mediaId))
+            .map(attachment => attachment.mediaId as number))];
+    const offlineMediaPending = offlineMediaIds.some(isOfflineMediaPending);
     const offlineMediaItem = {
         name: "Offline Media",
         disabled: offlineMediaPending,
-        action: () => requestOfflineMedia(offlineMediaKeys)
+        action: () => requestOfflineMedia(offlineMediaIds)
     };
 
     const items = [
@@ -65,7 +68,7 @@ export function onMessageRightClick(e, message: Message) {
                 copyTextToClipboard(BigInt(message._id))
             }
         },
-        ...(offlineMediaKeys.length > 0
+        ...(offlineMediaIds.length > 0
             ? [offlineMediaItem]
             : []),
         {

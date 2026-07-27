@@ -84,7 +84,7 @@
 	.category {
 		display: flex;
 		align-items: center;
-		font-size: 13px;
+		font-size: 14px;
         line-height: 18px;
 		color: #80848E;;
 		cursor: pointer;

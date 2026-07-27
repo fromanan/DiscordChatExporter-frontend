@@ -3,7 +3,7 @@ import { archiveOfflineMedia, hasOfflineMedia, type OfflineMediaArchiveResult } 
 
 export type OfflineMediaState = "pending" | "offline";
 
-const STORAGE_KEY = "dcef.offlineMediaKeys";
+const STORAGE_KEY = "dcef.offlineMediaIds";
 
 function loadOfflineKeys(): string[] {
     if (typeof localStorage === "undefined") {
@@ -35,71 +35,78 @@ function persistOfflineKeys(states: Record<string, OfflineMediaState>) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(offlineKeys));
 }
 
-function setMediaState(mediaKey: string, state: OfflineMediaState | null) {
+function stateKey(mediaId: number): string {
+    return String(mediaId);
+}
+
+function setMediaState(mediaId: number, state: OfflineMediaState | null) {
+    const key = stateKey(mediaId);
     offlineMediaStates.update(current => {
         const next = { ...current };
         if (state === null) {
-            delete next[mediaKey];
+            delete next[key];
         }
         else {
-            next[mediaKey] = state;
+            next[key] = state;
         }
         persistOfflineKeys(next);
         return next;
     });
 }
 
-export function markOfflineMedia(mediaKey: string) {
-    verifiedOfflineMediaKeys.add(mediaKey);
-    setMediaState(mediaKey, "offline");
+export function markOfflineMedia(mediaId: number) {
+    const key = stateKey(mediaId);
+    verifiedOfflineMediaKeys.add(key);
+    setMediaState(mediaId, "offline");
 }
 
-export function ensureOfflineMediaState(mediaKey: string): Promise<boolean> {
-    const currentState = get(offlineMediaStates)[mediaKey];
-    if (verifiedOfflineMediaKeys.has(mediaKey)) {
+export function ensureOfflineMediaState(mediaId: number): Promise<boolean> {
+    const key = stateKey(mediaId);
+    const currentState = get(offlineMediaStates)[key];
+    if (verifiedOfflineMediaKeys.has(key)) {
         return Promise.resolve(currentState === "offline");
     }
-    const existingCheck = offlineMediaChecks.get(mediaKey);
+    const existingCheck = offlineMediaChecks.get(key);
     if (existingCheck) {
         return existingCheck;
     }
 
-    const check = hasOfflineMedia(mediaKey)
+    const check = hasOfflineMedia(mediaId)
         .then(isOffline => {
             if (isOffline) {
-                markOfflineMedia(mediaKey);
+                markOfflineMedia(mediaId);
             }
             else if (currentState === "offline") {
-                setMediaState(mediaKey, null);
+                setMediaState(mediaId, null);
             }
             return isOffline;
         })
-        .finally(() => offlineMediaChecks.delete(mediaKey));
-    offlineMediaChecks.set(mediaKey, check);
+        .finally(() => offlineMediaChecks.delete(key));
+    offlineMediaChecks.set(key, check);
     return check;
 }
 
-export function isOfflineMediaPending(mediaKey: string): boolean {
-    return get(offlineMediaStates)[mediaKey] === "pending";
+export function isOfflineMediaPending(mediaId: number): boolean {
+    return get(offlineMediaStates)[stateKey(mediaId)] === "pending";
 }
 
-export function isOfflineMediaComplete(mediaKey: string): boolean {
-    return get(offlineMediaStates)[mediaKey] === "offline";
+export function isOfflineMediaComplete(mediaId: number): boolean {
+    return get(offlineMediaStates)[stateKey(mediaId)] === "offline";
 }
 
-export async function requestOfflineMedia(mediaKeys: string[]): Promise<OfflineMediaArchiveResult[]> {
+export async function requestOfflineMedia(mediaIds: number[]): Promise<OfflineMediaArchiveResult[]> {
     const currentStates = get(offlineMediaStates);
-    const uniqueKeys = [...new Set(mediaKeys)].filter(key => currentStates[key] === undefined);
-    uniqueKeys.forEach(key => setMediaState(key, "pending"));
+    const uniqueIds = [...new Set(mediaIds)].filter(id => currentStates[stateKey(id)] === undefined);
+    uniqueIds.forEach(id => setMediaState(id, "pending"));
 
-    const results = await Promise.all(uniqueKeys.map(archiveOfflineMedia));
+    const results = await Promise.all(uniqueIds.map(archiveOfflineMedia));
     results.forEach((result, index) => {
-        const mediaKey = uniqueKeys[index];
+        const mediaId = uniqueIds[index];
         if (result === "succeeded" || result === "persisted-view-update-deferred") {
-            markOfflineMedia(mediaKey);
+            markOfflineMedia(mediaId);
         }
         else if (result === "failed") {
-            setMediaState(mediaKey, null);
+            setMediaState(mediaId, null);
         }
     });
 

@@ -14,6 +14,7 @@
 	import MessageStickers from "./MessageStickers.svelte";
 	import MessageTimestamp from "./MessageTimestamp.svelte";
 	import { onMessageRightClick } from "./messageRightClick";
+	import { isDirectGifEmbed, urlsMatch } from "../../js/directGifEmbeds";
 
 	export let message: Message;
 	export let messageState;
@@ -36,7 +37,7 @@
 	}
 
 	function attachmentIdentity(attachment: Asset): string {
-		return attachment.mediaKey ?? attachment._id ?? attachment.filenameWithoutHash;
+		return attachment.mediaId?.toString() ?? attachment._id ?? attachment.filenameWithoutHash;
 	}
 
 	function normalizeMediaUrl(value: string | null | undefined): string {
@@ -67,10 +68,16 @@
 	function assetMatchesContent(attachment: Asset, content: string): boolean {
 		const normalizedContent = normalizeMediaUrl(content.trim());
 		const contentAttachmentId = discordAttachmentId(content);
-		const mediaKeyMatches = contentAttachmentId !== null &&
-			attachment.mediaKey?.endsWith(`:attachment:${contentAttachmentId}`);
+		const attachmentIds = [
+			attachment._id,
+			discordAttachmentId(attachment.originalUrl ?? ""),
+			discordAttachmentId(attachment.discordUrl ?? ""),
+			discordAttachmentId(attachment.originalPath)
+		].filter(Boolean);
+		const discordIdMatches = contentAttachmentId !== null &&
+			attachmentIds.includes(contentAttachmentId);
 
-		return Boolean(mediaKeyMatches) || (normalizedContent !== "" &&
+		return discordIdMatches || (normalizedContent !== "" &&
 			[attachment.path, attachment.originalPath, attachment.localPath, attachment.remotePath]
 				.some(path => normalizeMediaUrl(path) === normalizedContent));
 	}
@@ -94,10 +101,19 @@
 		[embed.image, embed.video, ...(embed.images ?? [])]
 			.filter((asset): asset is Asset => Boolean(asset)));
 
+	let directGifEmbedUrls: string[] = [];
+	$: directGifEmbedUrls = (message.embeds ?? [])
+		.filter(isDirectGifEmbed)
+		.map(embed => embed.url);
+
 	let filteredMessageContent = "";
 	$: filteredMessageContent = message.content[0].content
 		.split(/\r?\n/)
 		.filter(line => {
+			if (directGifEmbedUrls.some(url => urlsMatch(line, url))) {
+				return false;
+			}
+
 			const matchingAttachment = (message.attachments ?? [])
 				.filter(isRenderedInline)
 				.find(attachment => assetMatchesContent(attachment, line));
@@ -112,7 +128,6 @@
 
 	let shouldShowMessageContent = false;
 	$: shouldShowMessageContent =
-		(!messageState.messageContentIsLink || !filteredMessageContent.includes("https://tenor.com/view/")) &&
 		(!pollMessage || message.content[0].content !== "") &&
 		filteredMessageContent !== "";
 
@@ -189,6 +204,9 @@
 			{#if message.stickers}
 				<MessageStickers stickers={message.stickers} />
 			{/if}
+			{#if message.isDeleted && !shouldShowMessageContent}
+				<div class="message-deletion-status">(deleted)</div>
+			{/if}
 			<!-- {/if} -->
 		</div>
 		{#if message.reactions}
@@ -213,5 +231,11 @@
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
+	}
+
+	.message-deletion-status {
+		color: #a3a6aa;
+		font-size: 0.75rem;
+		font-weight: 500;
 	}
 </style>

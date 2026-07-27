@@ -65,7 +65,13 @@
 	}
 </script>
 
-<div class="channel" class:selected={guildState.channelId == channel._id} on:click={toggle} on:contextmenu|preventDefault={(e) => onChannelRightClick(e, channel._id, channel.name)}>
+<div
+    class="channel"
+    class:selected={guildState.channelId === channel._id}
+    aria-current={guildState.channelId === channel._id ? "page" : undefined}
+    on:click={toggle}
+    on:contextmenu|preventDefault={(e) => onChannelRightClick(e, channel._id, channel.name)}
+>
     <div class="channel-icon">
         <ChannelIcon channel={channel} width={16} />
     </div><span title="{channel.name} ({channel.msg_count} messages)">{channel.name}</span>
@@ -86,7 +92,7 @@
 		padding: 7px 10px;
 		margin: 1px 8px;
         gap: 6px;
-        font-size: 14px;
+        font-size: 15px;
         line-height: 18px;
         color: #949BA4;
         cursor: pointer;
@@ -94,8 +100,13 @@
         min-width: 0;
 	}
 
-	.channel:hover,
-	.channel.selected {
+	.channel:hover {
+		background-color: #404249;
+		color: white;
+	}
+
+	.channel.selected,
+	.channel[aria-current="page"] {
 		background-color: #404249;
 		color: white;
 	}
