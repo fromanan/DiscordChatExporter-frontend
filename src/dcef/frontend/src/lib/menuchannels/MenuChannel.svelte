@@ -1,7 +1,7 @@
 <script lang="ts">
     import MenuThread from "./MenuThread.svelte";
     import { copyTextToClipboard } from "../../js/helpers";
-    import { contextMenuItems } from "../../js/stores/menuStore";
+    import { contextMenuItems, handleContextMenu } from "../../js/stores/menuStore";
     import type { Channel } from "../../js/interfaces";
     import { getGuildState } from "../../js/stores/guildState.svelte";
     import { linkHandler } from "../../js/stores/settingsStore.svelte";
@@ -87,7 +87,7 @@
     class:selected={guildState.channelId === channel._id}
     aria-current={guildState.channelId === channel._id ? "page" : undefined}
     on:click={toggle}
-    on:contextmenu|preventDefault={(e) => onChannelRightClick(e, channel._id, channel.name)}
+    on:contextmenu={(e) => handleContextMenu(e, () => onChannelRightClick(e, channel._id, channel.name))}
 >
     <div class="channel-icon">
         <ChannelIcon channel={channel} width={16} />

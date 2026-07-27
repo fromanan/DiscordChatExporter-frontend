@@ -15,6 +15,7 @@
 	import MessageTimestamp from "./MessageTimestamp.svelte";
 	import { onMessageRightClick } from "./messageRightClick";
 	import { isDirectGifEmbed, urlsMatch } from "../../js/directGifEmbeds";
+	import { handleContextMenu } from "../../js/stores/menuStore";
 
 	export let message: Message;
 	export let messageState;
@@ -114,11 +115,18 @@
 		.filter(isDirectGifEmbed)
 		.map(embed => embed.url);
 
+	let videoEmbedUrls: string[] = [];
+	$: videoEmbedUrls = (message.embeds ?? [])
+		.filter(embed => Boolean(embed.video))
+		.map(embed => embed.url)
+		.filter(Boolean);
+
 	let filteredMessageContent = "";
 	$: filteredMessageContent = message.content[0].content
 		.split(/\r?\n/)
 		.filter(line => {
-			if (directGifEmbedUrls.some(url => urlsMatch(line, url))) {
+			if (directGifEmbedUrls.some(url => urlsMatch(line, url)) ||
+				videoEmbedUrls.some(url => urlsMatch(line, url))) {
 				return false;
 			}
 
@@ -168,6 +176,12 @@
 
 	let visibleEmbeds: Embed[] = [];
 	$: visibleEmbeds = (message.embeds ?? []).filter(embed => !isDuplicateAttachmentEmbed(embed, message.attachments ?? []));
+
+	let reactionsFollowMedia = false;
+	$: reactionsFollowMedia =
+		(message.attachments?.length ?? 0) > 0 ||
+		visibleEmbeds.length > 0 ||
+		(message.stickers?.length ?? 0) > 0;
 </script>
 
 {#if !pollMessage}
@@ -191,7 +205,7 @@
 				<MessageTimestamp channelOrThreadId={message.channelId} timestamp={message.timestamp} messageId={message._id} />
 			</div>
 		{/if}
-		<div class="message-accessories" on:contextmenu|preventDefault={(e) => onMessageRightClick(e, message)}>
+		<div class="message-accessories" on:contextmenu={(e) => handleContextMenu(e, () => onMessageRightClick(e, message))}>
 			{#if shouldShowMessageContent}
 				<div><MessageContent {message} content={filteredMessageContent} /></div>
 			{/if}
@@ -201,7 +215,7 @@
 			{#if pollMessage}
 				<div><MessagePoll {message} /></div>
 			{/if}
-			{#if message.attachments}
+			{#if (message.attachments?.length ?? 0) > 0}
 				<div>
 					<MessageAttachments
 						attachments={message.attachments}
@@ -214,7 +228,7 @@
 					<div><MessageEmbed {embed} {messageState} messageId={message._id} /></div>
 				{/each}
 			{/if}
-			{#if message.stickers}
+			{#if (message.stickers?.length ?? 0) > 0}
 				<MessageStickers stickers={message.stickers} />
 			{/if}
 			{#if message.isDeleted && !shouldShowMessageContent}
@@ -223,7 +237,7 @@
 			<!-- {/if} -->
 		</div>
 		{#if message.reactions}
-			<MessageReactions reactions={message.reactions} />
+			<MessageReactions reactions={message.reactions} followsMedia={reactionsFollowMedia} />
 		{/if}
 	</div>
 </div>

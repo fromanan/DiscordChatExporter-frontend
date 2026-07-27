@@ -2,6 +2,7 @@
     import type { Message } from "../../js/interfaces";
     import { changeMessageId, getGuildState, isChannel } from "../../js/stores/guildState.svelte";
     import { getLayoutState } from "../../js/stores/layoutState.svelte";
+    import { handleContextMenu } from "../../js/stores/menuStore";
     import { getViewUserState } from "../viewuser/viewUserState.svelte";
     import MessageAuthorName from "./MessageAuthorName.svelte";
     import MessageReactions from "./MessageReactions.svelte";
@@ -28,7 +29,7 @@
                 <MessageAuthorName author={message.author} on:click={() => viewUserState.setUser(message.author)} />
             </div>
 
-            <span on:contextmenu|preventDefault={e=>onMessageRightClick(e, message)} role="button" tabindex="0">
+            <span on:contextmenu={e => handleContextMenu(e, () => onMessageRightClick(e, message))} role="button" tabindex="0">
                 {#if message.type == "RecipientAdd"}
                     {#if message.mentions}
                         <span class="system-message-text">added <a title={message.mentions[0].name}>{message.mentions[0].nickname}</a> to the group</span>

@@ -5,13 +5,31 @@
 	import { checkUrl, copyTextToClipboard } from "../js/helpers"
 	import type { Guild } from "../js/interfaces";
     import { getGuildState } from "../js/stores/guildState.svelte";
-    import { contextMenuItems } from "../js/stores/menuStore";
+    import { contextMenuItems, handleContextMenu } from "../js/stores/menuStore";
     import { linkHandler } from "../js/stores/settingsStore.svelte";
     import Icon from "./icons/Icon.svelte";
 	import GuildBadge from "./menuchannels/GuildBadge.svelte";
 
 	let tooltip: { guild: Guild, left: number, top: number } | null = null
 	let tooltipElement: HTMLDivElement | null = null
+	const fallbackGuildIcon = "/favicon.png"
+	const fallbackHueSteps = [0, 38, 82, 126, 170, 214, 258, 302]
+	let failedGuildIconIds = new Set<string>()
+
+	function fallbackHueFor(guild: Guild): number {
+		const identity = guild?._id || guild?.name || "unknown"
+		let hash = 2166136261
+		for (let index = 0; index < identity.length; index++) {
+			hash ^= identity.charCodeAt(index)
+			hash = Math.imul(hash, 16777619)
+		}
+
+		return fallbackHueSteps[(hash >>> 0) % fallbackHueSteps.length]
+	}
+
+	function hasGuildIcon(guild: Guild): boolean {
+		return Boolean(guild.icon?.path) && !failedGuildIconIds.has(guild._id)
+	}
 
 	async function showGuildTooltip(event: MouseEvent, guild: Guild) {
 		const guildElement = event.currentTarget as HTMLElement
@@ -60,8 +78,12 @@
 		]
 	}
 
-	function handleGuildIconError(event: Event) {
-		(event.currentTarget as HTMLImageElement).src = "/favicon.png"
+	function handleGuildIconError(event: Event, guild: Guild) {
+		const image = event.currentTarget as HTMLImageElement
+		if (!image.src.endsWith(fallbackGuildIcon)) {
+			failedGuildIconIds = new Set(failedGuildIconIds).add(guild._id)
+			image.src = fallbackGuildIcon
+		}
 	}
 
 	const guildState = getGuildState()
@@ -89,11 +111,16 @@
 					class:selected={guildState.guildId === guild._id}
 					on:mouseenter={e => showGuildTooltip(e, guild)}
 					on:mouseleave={hideGuildTooltip}
-					on:contextmenu|preventDefault={e=>onRightClick(e, guild._id)}
+					on:contextmenu={e => handleContextMenu(e, () => onRightClick(e, guild._id))}
 					on:click={e => changeGuildId(guild._id)}
 				>
 					<div class="guild-selected-indicator"></div>
-					<img src={checkUrl(guild.icon)} alt={guild.name} on:error={handleGuildIconError} />
+					<img
+						src={hasGuildIcon(guild) ? checkUrl(guild.icon) : fallbackGuildIcon}
+						style:filter={!hasGuildIcon(guild) ? `hue-rotate(${fallbackHueFor(guild)}deg)` : undefined}
+						alt={guild.name}
+						on:error={event => handleGuildIconError(event, guild)}
+					/>
 				</div>
 			{/if}
 		{/each}

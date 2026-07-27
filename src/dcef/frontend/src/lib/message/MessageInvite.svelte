@@ -1,5 +1,6 @@
 <script lang="ts">
     import type { Guild, InvitePreview } from "../../js/interfaces";
+    import { normalizeDiscordId } from "../../js/discordIds";
     import { getGuildState } from "../../js/stores/guildState.svelte";
     import Icon from "../icons/Icon.svelte";
 
@@ -11,11 +12,15 @@
     const guildState = getGuildState();
 
     let inviteLink = $derived(`https://discord.gg/${invite.code}`);
-    let archivedGuildId = $derived(invite.guildId?.padStart(24, "0"));
+    let archivedGuildId = $derived(
+        invite.guildId ? normalizeDiscordId(invite.guildId) : undefined
+    );
     let isUnindexedName = $derived(!invite.name?.trim() && !invite.guildId);
     let isServerUnavailable = $derived(
         !archivedGuildId
-        || !guildState.guilds.some((guild: Guild) => guild._id === archivedGuildId)
+        || !guildState.guilds.some(
+            (guild: Guild) => normalizeDiscordId(guild._id) === archivedGuildId
+        )
     );
     let serverName = $derived(
         invite.name?.trim() || (invite.guildId ? `Server ${invite.guildId}` : "Unindexed Server")

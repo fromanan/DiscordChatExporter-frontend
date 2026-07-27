@@ -6,8 +6,9 @@
     import { fetchUserProfile } from "../../js/stores/api";
     import { getGuildState } from "../../js/stores/guildState.svelte";
     import { getViewUserState } from "../viewuser/viewUserState.svelte";
+    import { normalizeDiscordId } from "../../js/discordIds";
 
-    export let content: string
+    export let content: string | null | undefined
     export let emotes: Emoji[] = []
     export let mentions: Mention[] = []
     export let roles: Role[] = []
@@ -60,7 +61,7 @@
         return false
     }
 
-    $: displayContent = replaceUnicodeEmojis(content)
+    $: displayContent = replaceUnicodeEmojis(content ?? "")
     $: bigEmojis = messageContainsOnlyEmojis(displayContent)
 
     async function process(content: string, isOnline): void {
@@ -91,7 +92,9 @@
         event.preventDefault()
         event.stopPropagation()
 
-        const userId = target.dataset.userid?.padStart(24, "0")
+        const userId = target.dataset.userid
+            ? normalizeDiscordId(target.dataset.userid)
+            : undefined
         if (!userId) {
             return
         }
@@ -201,10 +204,20 @@
         font-size: 14px;
     }
 
+    :global(.twemoji),
     :global(.message-emoji),
     :global(.d-emoji) {
         width: 22px;
         height: auto;
+    }
+
+    :global(.smallemojis .twemoji) {
+        vertical-align: middle;
+        transform: translateY(-1px);
+    }
+
+    :global(.message-emoji),
+    :global(.d-emoji) {
         transform: translate(0px, 2px);
     }
 

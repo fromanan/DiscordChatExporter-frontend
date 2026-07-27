@@ -1,6 +1,6 @@
 <script lang="ts">
     import MenuChannel from "./MenuChannel.svelte";
-    import { contextMenuItems } from "../../js/stores/menuStore";
+    import { contextMenuItems, handleContextMenu } from "../../js/stores/menuStore";
     import { copyTextToClipboard } from "../../js/helpers";
     import { getGuildState } from "../../js/stores/guildState.svelte";
     import Icon from "../icons/Icon.svelte";
@@ -74,7 +74,7 @@
 		{/each}
 	</div>
 {:else}
-	<div class="category" on:click={toggle} on:contextmenu|preventDefault={(e) => onCategoryRightClick(e, category._id, categoryName)}>
+	<div class="category" on:click={toggle} on:contextmenu={(e) => handleContextMenu(e, () => onCategoryRightClick(e, category._id, categoryName))}>
 		<span title="{category.msg_count} messages">{categoryName}</span>
 		<div class="icon-dropdown {isOpen? '' : 'rotate'}">
 			<Icon name="other/dropdown" width={12.5} />

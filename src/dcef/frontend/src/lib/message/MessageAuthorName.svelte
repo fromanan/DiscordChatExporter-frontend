@@ -1,6 +1,7 @@
 <script lang="ts">
     import type { Author } from "../../js/interfaces";
     import { nameRenderer } from "../../js/stores/settingsStore.svelte";
+    import { handleContextMenu } from "../../js/stores/menuStore";
     import Icon from "../icons/Icon.svelte";
     import { onUserRightClick } from "./messageRightClick";
 
@@ -32,7 +33,7 @@
 </script>
 
 
-<button class="username" class:verified={tag === "SYSTEM"} title={nickname_only(author)} data-user-id={author._id} on:click on:contextmenu|preventDefault={e=>onUserRightClick(e, author)}>
+<button class="username" class:verified={tag === "SYSTEM"} title={nickname_only(author)} data-user-id={author._id} on:click on:contextmenu={e => handleContextMenu(e, () => onUserRightClick(e, author))}>
     {#if $nameRenderer === 'handle' }
         <span class="hover-underline" style="color:{author.color}">{full_name(author)}</span>
     {:else if $nameRenderer === 'nickname' }

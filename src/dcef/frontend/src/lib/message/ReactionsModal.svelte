@@ -1,6 +1,7 @@
 <script lang="ts">
     import Image from '../imagegallery/Image.svelte';
     import { getEmojiFallbackText, getEmojiImageUrl } from '../../js/emojis/emojiAssets';
+    import { handleContextMenu } from '../../js/stores/menuStore';
     import { onUserRightClick } from './messageRightClick';
 	export let reactions
 
@@ -46,7 +47,7 @@
 
                 {#if activeReaction.users}
                     {#each activeReaction.users as user}
-                        <div class="reaction-user" on:contextmenu|preventDefault|preventDefault={e=>onUserRightClick(e, user)}>
+                        <div class="reaction-user" on:contextmenu={e => handleContextMenu(e, () => onUserRightClick(e, user))}>
                             <Image
                                 class="global-reaction-user-img"
                                 alt={user.name}

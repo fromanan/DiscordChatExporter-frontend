@@ -11,7 +11,7 @@
     import MediaLoadingSkeleton from "./MediaLoadingSkeleton.svelte";
     import MediaArchiveIndicator from "./MediaArchiveIndicator.svelte";
     import { isDirectGifEmbed } from "../../js/directGifEmbeds";
-    import { getExternalVideoEmbed } from "../../js/externalVideoProviders";
+    import { getExternalVideoEmbed, isGyazoCaptureUrl } from "../../js/externalVideoProviders";
     import { isEmbedMediaArchivingExcluded } from "../../js/embedMediaArchiveExclusions";
 
     interface MyProps {
@@ -24,8 +24,9 @@
     let fieldGroups = $derived.by(()=> {
         let groups = []
         let currentGroup = []
-        for (let i = 0; i < embed.fields.length; i += 1) {
-            let currentField = embed.fields[i]
+        const fields = embed.fields ?? []
+        for (let i = 0; i < fields.length; i += 1) {
+            let currentField = fields[i]
             if (!currentField.isInline) {
                 if (currentGroup.length > 0) {
                     groups.push(currentGroup)
@@ -65,13 +66,19 @@
     let spotifyId = $derived(embed.url?.match(spotifyRegex)?.[1] ?? null)
 
     let externalVideo = $derived(getExternalVideoEmbed(embed.url))
+    let embeddedVideo = $derived(withEmbedThumbnail(embed.video, embed.thumbnail))
+    let isGyazoVideo = $derived(isGyazoCaptureUrl(embed.url) && Boolean(embed.video))
+    let thirdPartyVideoTitle = $derived(
+        isThirdPartyEmbedUrl(embed.url) && embed.title?.trim()
+            ? embed.title.trim()
+            : undefined)
     let archiveMediaExcluded = $derived(isEmbedMediaArchivingExcluded(embed))
     let redditThreadUrl = $derived(getRedditThreadUrl(embed.url))
     let redditPreviewImage = $derived(redditThreadUrl
         ? embed.image ?? embed.images?.[0] ?? null
         : null)
     let resolvedRedditVideo = $state<Asset | null>(null)
-    let playableVideo = $derived(embed.video ?? resolvedRedditVideo)
+    let playableVideo = $derived(embeddedVideo ?? resolvedRedditVideo)
     let hasPlayableVideo = $derived(Boolean(externalVideo || playableVideo))
 
     $effect(() => {
@@ -163,6 +170,35 @@
         }
     }
 
+    function withEmbedThumbnail(video: Asset | undefined, thumbnail: Asset | undefined): Asset | null {
+        if (!video || video.thumbnailUrl || !thumbnail) {
+            return video ?? null
+        }
+
+        return {
+            ...video,
+            thumbnailUrl: checkUrl(thumbnail)
+        }
+    }
+
+    function isThirdPartyEmbedUrl(value: string | null | undefined): boolean {
+        if (!value) {
+            return false
+        }
+
+        try {
+            const hostname = new URL(value).hostname.toLowerCase()
+            return hostname !== "discord.com"
+                && !hostname.endsWith(".discord.com")
+                && hostname !== "discordapp.com"
+                && !hostname.endsWith(".discordapp.com")
+                && hostname !== "discordapp.net"
+                && !hostname.endsWith(".discordapp.net")
+        } catch {
+            return false
+        }
+    }
+
     function onAuthorIconError(e: Event) {
         console.log('author icon error', e)
         authorIconFailedToLoad = true
@@ -208,8 +244,8 @@
         {/if}
     {:else if spotifyId}
         <iframe class="spotify-iframe" src={`https://open.spotify.com/embed/track/${spotifyId}`} frameborder="0" sandbox="allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts" style="width: 400px; height: 80px;"></iframe>
-    {:else if embed.video && embed.title === "" && embed.description === ""}
-        <MessageVideo attachment={embed.video} {messageId} mediaKind="embed-video" showArchiveIndicator={!archiveMediaExcluded} />
+    {:else if embeddedVideo && (isGyazoVideo || (embed.title === "" && embed.description === ""))}
+        <MessageVideo attachment={embeddedVideo} {messageId} mediaKind="embed-video" showArchiveIndicator={!archiveMediaExcluded} mediaTitle={thirdPartyVideoTitle} mediaLink={thirdPartyVideoTitle ? embed.url : undefined} />
     {:else}
         <div class="embed" class:smallthumbnail={smallThumbnail} style="border-left: {embed.color} 4px solid;">
             <div class="header-row">
@@ -246,7 +282,7 @@
                         </div>
                     {/if}
 
-                    {#if embed.fields.length > 0}
+                    {#if (embed.fields?.length ?? 0) > 0}
                         <div class="fields">
                             {#each fieldGroups as group}
                                 {#each group as field}
@@ -283,7 +319,7 @@
                 {/if}
 
                 {#if playingVideo}
-                    {#if externalVideo}
+                    {#if externalVideo && !playableVideo}
                         <div class="provider-video-container" style:aspect-ratio={`${embed.video?.width ?? embed.thumbnail?.width ?? 16} / ${embed.video?.height ?? embed.thumbnail?.height ?? 9}`}>
                             <!-- Provider URLs are constructed from an allow-list in externalVideoProviders.ts. -->
                             <iframe
@@ -295,10 +331,18 @@
                                 sandbox="allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-presentation allow-same-origin allow-scripts"
                                 allowfullscreen
                             ></iframe>
+                            {#if thirdPartyVideoTitle}
+                                <a
+                                    class="provider-video-title"
+                                    href={embed.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >{thirdPartyVideoTitle}</a>
+                            {/if}
                         </div>
                     {:else if playableVideo}
                         <div class="embed-video-2">
-                            <MessageVideo attachment={playableVideo} {messageId} mediaKind="embed-video" showArchiveIndicator={Boolean(embed.video) && !archiveMediaExcluded} />
+                            <MessageVideo attachment={playableVideo} {messageId} mediaKind="embed-video" showArchiveIndicator={Boolean(embed.video) && !archiveMediaExcluded} mediaTitle={thirdPartyVideoTitle} mediaLink={thirdPartyVideoTitle ? embed.url : undefined} />
                         </div>
                     {/if}
                 {/if}
@@ -367,6 +411,39 @@
 		width: 100%;
 		height: 100%;
 	}
+
+    .provider-video-title {
+        position: absolute;
+        z-index: 2;
+        top: 13px;
+        left: 14px;
+        width: fit-content;
+        max-width: calc(100% - 28px);
+        overflow: hidden;
+        padding: 4px 8px;
+        border-radius: 4px;
+        color: #f2f3f5;
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 20px;
+        background: rgba(17, 18, 20, 0.76);
+        box-sizing: border-box;
+        text-overflow: ellipsis;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+        white-space: nowrap;
+        text-decoration: none;
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(calc(-100% - 13px));
+        transition: opacity 160ms ease, transform 160ms ease;
+    }
+
+    .provider-video-container:hover .provider-video-title,
+    .provider-video-container:focus-within .provider-video-title {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateY(0);
+    }
     .videogif {
         position: relative;
         z-index: 1;

@@ -2,6 +2,7 @@
     import { checkUrl } from "../../js/helpers";
     import type { Message } from "../../js/interfaces";
     import { getGuildState } from "../../js/stores/guildState.svelte";
+    import { handleContextMenu } from "../../js/stores/menuStore";
     import { getViewUserState } from "../viewuser/viewUserState.svelte";
     import MessageAuthorName from "./MessageAuthorName.svelte";
     import MessageMarkdown from "./MessageMarkdown.svelte";
@@ -72,7 +73,7 @@
                 alt=""
                 on:error={useFallbackAvatar}
                 on:click
-                on:contextmenu|preventDefault={e=>onUserRightClick(e, referencedMessage.author)}
+                on:contextmenu={e => handleContextMenu(e, () => onUserRightClick(e, referencedMessage.author))}
             />
             <MessageAuthorName author={referencedMessage.author} on:click={() => viewUserState.setUser(referencedMessage.author)} />
             <div

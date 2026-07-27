@@ -14,7 +14,7 @@
     import Settings from "./lib/settings/Settings.svelte";
     import ContextMenu from "./lib/components/menu/ContextMenu.svelte";
     import { onMount } from "svelte";
-    import { position } from "./js/stores/menuStore";
+    import { contextMenuItems, position } from "./js/stores/menuStore";
     import { font, hideSpoilers, theme } from './js/stores/settingsStore.svelte';
     import { getGuildState, isChannel } from './js/stores/guildState.svelte';
     import { getLayoutState } from './js/stores/layoutState.svelte';
@@ -86,6 +86,12 @@
     }
     const handleThrottledMousemove = throttle(handleMousemove, 100, { leading: false, trailing: true });
 
+    function handleContextMenuCapture(event: MouseEvent) {
+      if (event.ctrlKey) {
+        $contextMenuItems = [];
+        event.stopPropagation();
+      }
+    }
 
     // called from parsed markdown channel and message links
     // window.globalSetGuild = async (guildId: string) => {
@@ -101,6 +107,8 @@
       await guildState.pushState()
     }
 </script>
+
+<svelte:window on:contextmenu|capture={handleContextMenuCapture} />
 
 <svelte:head>
     <title>{pageTitle}</title>

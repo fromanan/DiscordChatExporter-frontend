@@ -20,9 +20,19 @@
         messageId?: string;
         mediaKind?: string;
         showArchiveIndicator?: boolean;
+        mediaTitle?: string;
+        mediaLink?: string;
     }
 
-    let { attachment, onmediastatus = undefined, messageId, mediaKind, showArchiveIndicator = true }: MyProps = $props();
+    let {
+        attachment,
+        onmediastatus = undefined,
+        messageId,
+        mediaKind,
+        showArchiveIndicator = true,
+        mediaTitle = undefined,
+        mediaLink = undefined
+    }: MyProps = $props();
     let resolvedMediaId = $state<number | null>(attachment.mediaId ?? null);
     let reloadAttempt = $state(0);
     let mediaUrl = $derived(
@@ -35,6 +45,17 @@
     let failedMediaIdentity = $state<string | null>(null);
     let isLoaded = $derived(loadedMediaIdentity === mediaIdentity);
     let failedToLoad = $derived(failedMediaIdentity === mediaIdentity);
+    let posterUrl = $derived(attachment.thumbnailUrl ?? "");
+    let loadedPosterUrl = $state<string | null>(null);
+    let failedPosterUrl = $state<string | null>(null);
+    let posterIsLoading = $derived(
+        posterUrl !== ""
+        && loadedPosterUrl !== posterUrl
+        && failedPosterUrl !== posterUrl);
+    let mediaIsLoading = $derived(
+        posterIsLoading
+        || (posterUrl === "" && !isLoaded && !failedToLoad));
+    let displayTitle = $derived(mediaTitle?.trim() ?? "");
     const audioplayerState = getAudioplayerState();
 
     let wrapper: HTMLDivElement;
@@ -65,6 +86,34 @@
             });
         return () => {
             cancelled = true;
+        };
+    });
+
+    $effect(() => {
+        const url = posterUrl;
+        if (!url || loadedPosterUrl === url || failedPosterUrl === url) {
+            return;
+        }
+
+        let cancelled = false;
+        const poster = new window.Image();
+        poster.onload = () => {
+            if (!cancelled) {
+                loadedPosterUrl = url;
+                failedPosterUrl = null;
+            }
+        };
+        poster.onerror = () => {
+            if (!cancelled) {
+                loadedPosterUrl = null;
+                failedPosterUrl = url;
+            }
+        };
+        poster.src = url;
+        return () => {
+            cancelled = true;
+            poster.onload = null;
+            poster.onerror = null;
         };
     });
 
@@ -194,7 +243,7 @@
 <div
     bind:this={wrapper}
     class="spoiler-wrapper"
-    class:loading={!attachment.thumbnailUrl && !isLoaded && !failedToLoad}
+    class:loading={mediaIsLoading}
     class:failed={failedToLoad}
     class:controls-hidden={!controlsVisible && hasStarted}
     style:aspect-ratio="{metadataWidth ?? 16} / {metadataHeight ?? 9}"
@@ -204,10 +253,10 @@
     onpointerleave={hideControls}
     onfullscreenchange={() => isFullscreen = document.fullscreenElement === wrapper}
 >
-    {#if showArchiveIndicator}
+    {#if showArchiveIndicator && !failedToLoad}
         <MediaArchiveIndicator asset={attachment} {messageId} {mediaKind} />
     {/if}
-    <MediaLoadingSkeleton active={!attachment.thumbnailUrl && !isLoaded && !failedToLoad} />
+    <MediaLoadingSkeleton active={mediaIsLoading} />
     {#if failedToLoad}
         <MediaLoadFailure onreload={retryMedia} />
     {/if}
@@ -249,6 +298,30 @@
             </video>
         {/key}
 
+        {#if displayTitle}
+            {#if mediaLink}
+                <a
+                    class="video-title"
+                    class:tray={hasStarted}
+                    class:visible={!hasStarted || controlsVisible}
+                    href={mediaLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onclick={(event) => event.stopPropagation()}
+                >{displayTitle}</a>
+            {:else}
+                <div
+                    class="video-title"
+                    class:tray={hasStarted}
+                    class:visible={!hasStarted || controlsVisible}
+                >{displayTitle}</div>
+            {/if}
+        {/if}
+
+        {#if !hasStarted && !failedToLoad && !posterIsLoading}
+            <VideoCenterPlayButton onclick={togglePlayback} />
+        {/if}
+
         {#if isLoaded}
             <a
                 class="download-video"
@@ -260,11 +333,6 @@
             >
                 <Icon name="other/download" width={20} />
             </a>
-
-            {#if !hasStarted && !failedToLoad}
-                <VideoCenterPlayButton onclick={togglePlayback} />
-            {/if}
-
             {#if hasStarted}
                 <div class="video-controls" class:visible={controlsVisible || paused}>
                     <button
@@ -355,13 +423,44 @@
         max-width: min(550px, 100%);
         max-height: 400px;
         object-fit: contain;
-        opacity: 0;
+        opacity: 1;
         cursor: pointer;
-        transition: opacity 120ms ease-out;
     }
 
-    .message-video.loaded {
+    .video-title {
+        position: absolute;
+        z-index: 2;
+        top: 10px;
+        right: 48px;
+        left: 53px;
+        width: fit-content;
+        max-width: calc(100% - 106px);
+        overflow: hidden;
+        padding: 4px 8px;
+        border-radius: 4px;
+        color: #f2f3f5;
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 20px;
+        background: rgba(17, 18, 20, 0.76);
+        box-sizing: border-box;
+        text-overflow: ellipsis;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+        white-space: nowrap;
+        text-decoration: none;
+        transition: opacity 160ms ease, transform 160ms ease;
+    }
+
+    .video-title.tray {
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(calc(-100% - 13px));
+    }
+
+    .video-title.tray.visible {
         opacity: 1;
+        pointer-events: auto;
+        transform: translateY(0);
     }
 
     .spoiler-wrapper:not(.loading):not(.failed) {

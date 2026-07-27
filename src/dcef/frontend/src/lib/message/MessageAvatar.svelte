@@ -1,6 +1,7 @@
 <script lang="ts">
     import { checkUrl } from "../../js/helpers";
     import type { Author } from "../../js/interfaces";
+    import { handleContextMenu } from "../../js/stores/menuStore";
     import { onUserRightClick } from "./messageRightClick";
 
     export let author: Author
@@ -44,7 +45,7 @@
         alt=""
         on:error={useFallbackAvatar}
         on:click
-        on:contextmenu|preventDefault={e=>onUserRightClick(e, author)}
+        on:contextmenu={e => handleContextMenu(e, () => onUserRightClick(e, author))}
     />
 {/if}
 

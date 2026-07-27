@@ -1,6 +1,7 @@
 <script lang="ts">
     import type { Author, Embed, Message } from "../../js/interfaces";
     import { channelOrThreadIdToName, getGuildState } from "../../js/stores/guildState.svelte";
+    import { handleContextMenu } from "../../js/stores/menuStore";
     import Icon from "../icons/Icon.svelte";
     import { getViewUserState } from "../viewuser/viewUserState.svelte";
     import MessageAuthorName from "./MessageAuthorName.svelte";
@@ -77,10 +78,7 @@
     }
 </script>
 
-<div class="wrapper" oncontextmenu={e=>{
-        e.preventDefault()
-        onMessageRightClick(e, message)
-    }}>
+<div class="wrapper" oncontextmenu={e => handleContextMenu(e, () => onMessageRightClick(e, message))}>
     <div class="avatar-row">
         <MessageAvatar author={automodAuthorMock} messageState={messageState} />
         <div style="width: 100%;">

@@ -5,6 +5,7 @@
     import ReactionsModal from "./ReactionsModal.svelte";
 
     export let reactions: Reaction[];
+    export let followsMedia = false;
 
     let reactionsModal: ReactionsModal;
     let visibleReactions: Reaction[];
@@ -20,7 +21,7 @@
 {#if visibleReactions.length > 0}
     <ReactionsModal reactions={visibleReactions} bind:this={reactionsModal} />
 
-    <div class="message-reactions">
+    <div class="message-reactions" class:follows-media={followsMedia}>
         {#each visibleReactions as reaction}
             {@const emojiUsers = reaction?.users?.map(user => user._id) ?? []}
             {@const syntheticAddReaction = isSyntheticAddReaction(reaction)}
@@ -56,13 +57,17 @@
     .message-reaction {
         margin-right: 4px;
         display: flex;
-        margin: 4px 4px 0px 0;
+        margin: 3px 4px 0 0;
         padding: 2px 6px;
         border: 1px solid transparent;
         border-radius: 8px;
         background-color: #2b2d31;
         align-items: center;
         cursor: pointer;
+    }
+
+    .message-reactions.follows-media .message-reaction {
+        margin-top: 5px;
     }
 
     .message-reaction.me {
