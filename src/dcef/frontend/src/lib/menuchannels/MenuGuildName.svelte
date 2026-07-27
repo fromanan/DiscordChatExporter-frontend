@@ -22,7 +22,7 @@
         line-height: 20px;
         top: 0;
         background-color: var(--panel-channels-bg);
-        border-bottom: 1px solid #20222599;
+        border-bottom: 1px solid #3f4147;
         margin-bottom: 5px;
         gap: 8px;
     }

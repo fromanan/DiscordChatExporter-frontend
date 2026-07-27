@@ -36,7 +36,7 @@
                         markOfflineMedia(id);
                     }
                     else {
-                        void ensureOfflineMediaState(id);
+                        void ensureOfflineMediaState(id, asset.isOffline);
                     }
                 }
             });

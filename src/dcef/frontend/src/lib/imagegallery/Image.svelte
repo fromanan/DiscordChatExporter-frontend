@@ -29,8 +29,13 @@
 	let manualSpoilerHidden = $state(false)
 	let resolvedMediaId = $state<number | null>(asset.mediaId ?? null)
 	let reloadAttempt = $state(0)
+	let wrapperElement = $state<HTMLDivElement | null>(null)
+	let isNearViewport = $state(false)
+	let settledThumbnailUrl = $state<string | null>(null)
+	let failedThumbnailUrl = $state<string | null>(null)
 	let mediaUrl = $derived(
-		resolvedMediaId && $offlineMediaStates[String(resolvedMediaId)] === "offline"
+		resolvedMediaId && (asset.isOffline === true
+			|| $offlineMediaStates[String(resolvedMediaId)] === "offline")
 			? getOfflineMediaUrl(resolvedMediaId, asset.filenameWithoutHash)
 			: checkUrl(asset))
 	let mediaIdentity = $derived(`${mediaUrl}:${reloadAttempt}`)
@@ -38,6 +43,11 @@
 	let failedMediaIdentity = $state<string | null>(null)
 	let isLoaded = $derived(loadedMediaIdentity === mediaIdentity)
 	let failedToLoad = $derived(failedMediaIdentity === mediaIdentity)
+	let thumbnailSettled = $derived(
+		!asset.thumbnailUrl
+		|| settledThumbnailUrl === asset.thumbnailUrl
+		|| failedThumbnailUrl === asset.thumbnailUrl)
+	let shouldLoadFullMedia = $derived(isNearViewport && thumbnailSettled)
 	let measuredWidth = $state<number | null>(null)
 	let measuredHeight = $state<number | null>(null)
 	let resolvedAspectRatio = $derived(
@@ -73,13 +83,29 @@
 				if (!cancelled) {
 					resolvedMediaId = id
 					if (id) {
-						void ensureOfflineMediaState(id)
+						void ensureOfflineMediaState(id, asset.isOffline)
 					}
 				}
 			})
 		return () => {
 			cancelled = true
 		}
+	})
+
+	$effect(() => {
+		if (!wrapperElement || typeof IntersectionObserver === "undefined") {
+			isNearViewport = true
+			return
+		}
+
+		const observer = new IntersectionObserver(entries => {
+			if (entries.some(entry => entry.isIntersecting)) {
+				isNearViewport = true
+				observer.disconnect()
+			}
+		}, { rootMargin: "300px" })
+		observer.observe(wrapperElement)
+		return () => observer.disconnect()
 	})
 
 	function viewGallery() {
@@ -122,35 +148,43 @@
 </script>
 
 
-<div class="spoiler-wrapper {divclass}" onclick={clickable ? viewGallery : undefined} class:clickable={clickable} class:loading={!isLoaded && !failedToLoad} class:failed={failedToLoad} class:fill-container={fillContainer} style:aspect-ratio={reserveSpace ? resolvedAspectRatio : undefined} style:width={reserveSpace && !fillContainer ? resolvedWidth : undefined}>
+<div bind:this={wrapperElement} class="spoiler-wrapper {divclass}" onclick={clickable ? viewGallery : undefined} class:clickable={clickable} class:loading={!isLoaded && !failedToLoad && !thumbnailSettled} class:failed={failedToLoad} class:fill-container={fillContainer} style:aspect-ratio={reserveSpace ? resolvedAspectRatio : undefined} style:width={reserveSpace && !fillContainer ? resolvedWidth : undefined}>
 	{#if showCloudIndicator}
 		<MediaArchiveIndicator {asset} {messageId} {mediaKind} />
 	{/if}
-	<MediaLoadingSkeleton active={!isLoaded && !failedToLoad} />
+	<MediaLoadingSkeleton active={!isLoaded && !failedToLoad && !thumbnailSettled} />
 	{#if failedToLoad}
 		<MediaLoadFailure onreload={retryMedia} />
 	{/if}
 	{#if asset.thumbnailUrl}
 		<img
 			class="media-thumbnail"
-			class:hidden={isLoaded}
+			class:hidden={isLoaded || failedThumbnailUrl === asset.thumbnailUrl}
 			src={asset.thumbnailUrl}
+			loading="lazy"
+			decoding="async"
 			alt=""
 			aria-hidden="true"
+			onload={() => settledThumbnailUrl = asset.thumbnailUrl ?? null}
+			onerror={() => failedThumbnailUrl = asset.thumbnailUrl ?? null}
 		/>
 	{/if}
-	{#key mediaIdentity}
-		<img
-			class="media-full"
-			class:media-spoiler={isBlurred}
-			class:loaded={isLoaded}
-			src={mediaUrl}
-			{alt}
-			{...otherProps}
-			onload={handleLoad}
-			onerror={handleError}
-		/>
-	{/key}
+	{#if shouldLoadFullMedia}
+		{#key mediaIdentity}
+			<img
+				class="media-full"
+				class:media-spoiler={isBlurred}
+				class:loaded={isLoaded}
+				src={mediaUrl}
+				loading="lazy"
+				decoding="async"
+				{alt}
+				{...otherProps}
+				onload={handleLoad}
+				onerror={handleError}
+			/>
+		{/key}
+	{/if}
 </div>
 
 

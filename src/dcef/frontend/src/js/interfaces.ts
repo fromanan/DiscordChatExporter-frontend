@@ -26,6 +26,7 @@ export interface Category {
 	msg_count: number;
 	position?: number | null;
 	categoryOrder?: number | null;
+	isHeaderless?: boolean;
 }
 
 export interface Asset {

@@ -67,20 +67,33 @@
 </script>
 
 
-<div class="category" on:click={toggle} on:contextmenu|preventDefault={(e) => onCategoryRightClick(e, category._id, categoryName)}>
-    <span title="{category.msg_count} messages">{categoryName}</span>
-    <div  class="icon-dropdown {isOpen? '' : 'rotate'}">
-		<Icon name="other/dropdown" width={12.5} />
+{#if category.isHeaderless}
+	<div class="standalone-channels">
+		{#each category.channels as channel}
+			<MenuChannel channel={channel} />
+		{/each}
 	</div>
-</div>
-{#each category.channels as channel}
-    {#if isOpen || channel._id == guildState.channelId}
-        <MenuChannel channel={channel} />
-    {/if}
-{/each}
+{:else}
+	<div class="category" on:click={toggle} on:contextmenu|preventDefault={(e) => onCategoryRightClick(e, category._id, categoryName)}>
+		<span title="{category.msg_count} messages">{categoryName}</span>
+		<div class="icon-dropdown {isOpen? '' : 'rotate'}">
+			<Icon name="other/dropdown" width={12.5} />
+		</div>
+	</div>
+	{#each category.channels as channel}
+		{#if isOpen || channel._id == guildState.channelId}
+			<MenuChannel channel={channel} />
+		{/if}
+	{/each}
+{/if}
 
 
 <style>
+	.standalone-channels {
+		margin-top: 8px;
+		padding-bottom: 8px;
+		border-bottom: 1px solid #3f4147;
+	}
 	.category {
 		display: flex;
 		align-items: center;

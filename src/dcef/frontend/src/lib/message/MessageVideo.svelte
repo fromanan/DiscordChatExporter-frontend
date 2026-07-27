@@ -12,6 +12,7 @@
     import MediaLoadFailure from "./MediaLoadFailure.svelte";
     import MediaLoadingSkeleton from "./MediaLoadingSkeleton.svelte";
     import MediaArchiveIndicator from "./MediaArchiveIndicator.svelte";
+    import VideoCenterPlayButton from "./VideoCenterPlayButton.svelte";
 
     interface MyProps {
         attachment: Asset;
@@ -25,7 +26,8 @@
     let resolvedMediaId = $state<number | null>(attachment.mediaId ?? null);
     let reloadAttempt = $state(0);
     let mediaUrl = $derived(
-        resolvedMediaId && $offlineMediaStates[String(resolvedMediaId)] === "offline"
+        resolvedMediaId && (attachment.isOffline === true
+            || $offlineMediaStates[String(resolvedMediaId)] === "offline")
             ? getOfflineMediaUrl(resolvedMediaId, attachment.filenameWithoutHash)
             : checkUrl(attachment));
     let mediaIdentity = $derived(`${mediaUrl}:${reloadAttempt}`);
@@ -57,7 +59,7 @@
                 if (!cancelled) {
                     resolvedMediaId = id;
                     if (id) {
-                        void ensureOfflineMediaState(id);
+                        void ensureOfflineMediaState(id, attachment.isOffline);
                     }
                 }
             });
@@ -192,7 +194,7 @@
 <div
     bind:this={wrapper}
     class="spoiler-wrapper"
-    class:loading={!isLoaded && !failedToLoad}
+    class:loading={!attachment.thumbnailUrl && !isLoaded && !failedToLoad}
     class:failed={failedToLoad}
     class:controls-hidden={!controlsVisible && hasStarted}
     style:aspect-ratio="{metadataWidth ?? 16} / {metadataHeight ?? 9}"
@@ -205,7 +207,7 @@
     {#if showArchiveIndicator}
         <MediaArchiveIndicator asset={attachment} {messageId} {mediaKind} />
     {/if}
-    <MediaLoadingSkeleton active={!isLoaded && !failedToLoad} />
+    <MediaLoadingSkeleton active={!attachment.thumbnailUrl && !isLoaded && !failedToLoad} />
     {#if failedToLoad}
         <MediaLoadFailure onreload={retryMedia} />
     {/if}
@@ -218,7 +220,7 @@
                 bind:this={video}
                 class="message-video"
                 class:loaded={isLoaded}
-                preload="metadata"
+                preload="none"
                 poster={attachment.thumbnailUrl}
                 playsinline
                 onclick={togglePlayback}
@@ -259,10 +261,8 @@
                 <Icon name="other/download" width={20} />
             </a>
 
-            {#if !hasStarted}
-                <button class="center-play" type="button" aria-label="Play video" onclick={togglePlayback}>
-                    <Icon name="player/play" width={24} />
-                </button>
+            {#if !hasStarted && !failedToLoad}
+                <VideoCenterPlayButton onclick={togglePlayback} />
             {/if}
 
             {#if hasStarted}
@@ -369,7 +369,6 @@
     }
 
     .download-video,
-    .center-play,
     .control-button {
         display: grid;
         place-items: center;
@@ -394,24 +393,6 @@
 
     .download-video:hover {
         background: rgba(43, 45, 49, 0.95);
-    }
-
-    .center-play {
-        position: absolute;
-        z-index: 2;
-        top: 50%;
-        left: 50%;
-        width: 48px;
-        height: 48px;
-        border-radius: 50%;
-        background: rgba(0, 0, 0, 0.82);
-        transform: translate(-50%, -50%);
-        transition: background-color 120ms ease, transform 120ms ease;
-    }
-
-    .center-play:hover {
-        background: rgba(0, 0, 0, 0.92);
-        transform: translate(-50%, -50%) scale(1.04);
     }
 
     .video-controls {

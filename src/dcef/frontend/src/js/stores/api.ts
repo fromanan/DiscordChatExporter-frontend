@@ -16,6 +16,17 @@ function requireOk(response: Response): Response {
 }
 
 export type OfflineMediaArchiveResult = "succeeded" | "persisted-view-update-deferred" | "pending" | "failed";
+export interface OfflineMediaStatus {
+    mediaId: number;
+    status: "pending" | "downloading" | "completed" | "failed" | "not-downloadable";
+    isOffline: boolean;
+    attempts: number;
+    error?: string | null;
+    hasThumbnail: boolean;
+}
+export interface RedditPreviewMedia {
+    url: string;
+}
 
 export function getOfflineMediaUrl(mediaId: number, fileName?: string): string {
     return fileName
@@ -27,16 +38,38 @@ export function getOfflineMediaThumbnailUrl(mediaId: number): string {
     return `${ARCHIVE_API_BASE_URL}/media/${mediaId}/thumbnail.webp`;
 }
 
-export async function hasOfflineMedia(mediaId: number): Promise<boolean> {
+export async function fetchRedditPreviewMedia(threadUrl: string): Promise<RedditPreviewMedia | null> {
     try {
-        const response = await fetch(getOfflineMediaUrl(mediaId), {
-            headers: { Range: "bytes=0-0" },
-            cache: "no-store"
-        });
-        return response.ok;
+        const response = await fetch(
+            `${ARCHIVE_API_BASE_URL}/previews/reddit?url=${encodeURIComponent(threadUrl)}`);
+        if (!response.ok) {
+            return null;
+        }
+        const payload = await response.json();
+        return typeof payload.url === "string" ? payload : null;
     }
     catch {
-        return false;
+        return null;
+    }
+}
+
+export async function fetchOfflineMediaStatuses(mediaIds: number[]): Promise<OfflineMediaStatus[]> {
+    const uniqueIds = [...new Set(mediaIds)].filter(id => Number.isSafeInteger(id) && id > 0);
+    if (uniqueIds.length === 0) {
+        return [];
+    }
+
+    try {
+        const response = await fetch(
+            `${ARCHIVE_API_BASE_URL}/media/status?ids=${uniqueIds.join(",")}`,
+            { cache: "no-store" });
+        if (!response.ok) {
+            return [];
+        }
+        return await response.json();
+    }
+    catch {
+        return [];
     }
 }
 

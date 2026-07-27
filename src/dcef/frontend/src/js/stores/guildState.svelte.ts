@@ -485,7 +485,8 @@ function withGuildSpecialChannels(
 		name: "Get Started",
 		channels: specialChannels,
 		msg_count: 0,
-		position: -1
+		position: -1,
+		isHeaderless: true
 	}, ...regularCategories]
 }
 
