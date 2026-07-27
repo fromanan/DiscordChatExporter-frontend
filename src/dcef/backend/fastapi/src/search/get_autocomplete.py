@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from ..common.helpers import pad_id
 from . import Autocomplete
 
@@ -12,6 +12,8 @@ router = APIRouter(
 def search_autocomplete(guild_id: str, key: str = None, value: str = None, limit: int = 100):
 	if (key == None or value == None):
 		return []
+	if limit < 1 or limit > 100:
+		raise HTTPException(status_code=400, detail="limit must be between 1 and 100")
 
 	padded_guild_id = pad_id(guild_id)
 

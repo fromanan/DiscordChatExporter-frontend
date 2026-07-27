@@ -10,7 +10,6 @@ __pycache__
 .vscode
 .venv
 
-
 # releases (built files)
 /release/*.zip
 /release/dcef/backend/fastapi/
@@ -35,16 +34,17 @@ __pycache__
 !/release/exports/README.txt
 !/release/exports/example_guild/
 
-
-
 # nginx dev
 /src/logs/
 /src/temp/
 
-
 # mongodb database
 /src/dcef/backend/mongodb/db
 
-
 # private files
 /bruno
+
+# Agentic
+.ai
+.codex
+_temp

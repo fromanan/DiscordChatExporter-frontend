@@ -64,7 +64,7 @@
 
 {#if referencedMessage}
     <div class="referenced clickable">
-        <div class="referenced-arrow" />
+        <div class="referenced-arrow"></div>
         {#if referencedMessage.author}
             <img
                 class="referenced-avatar"
@@ -102,7 +102,7 @@
 
 {:else if messageState.messageIsFromDifferentGuild}
     <div class="referenced">
-        <div class="referenced-arrow" />
+        <div class="referenced-arrow"></div>
         <div class="referenced-avatar">
             <Icon name="reply/deleted" width={12} />
         </div>
@@ -121,7 +121,7 @@
 <!-- A missing referenced message is ambiguous: it may be deleted, uncaptured, or inaccessible. -->
 {:else if message.reference && message.reference.messageId}
     <div class="referenced">
-        <div class="referenced-arrow" />
+        <div class="referenced-arrow"></div>
         <div class="referenced-avatar">
             <Icon name="reply/deleted" width={12} />
         </div>

@@ -7,8 +7,9 @@
     interface MyProps {
         author: Author
         messageState?: any
+        isOriginalPoster?: boolean
     }
-    let { author, messageState}: MyProps = $props();
+    let { author, messageState, isOriginalPoster=false}: MyProps = $props();
 
     function full_name(author: Author) {
         return author.name
@@ -54,6 +55,9 @@
         {tag}
     </span>
 {/if}
+{#if isOriginalPoster}
+    <span class="tag-op">OP</span>
+{/if}
 
 <style>
     .username {
@@ -89,5 +93,18 @@
             place-items: center;
             margin-left: -4px;
         }
+    }
+
+    .tag-op {
+        position: relative;
+        top: -0.1rem;
+        margin-left: 0.3rem;
+        padding: 0 4px;
+        border-radius: 3px;
+        background-color: #b5bac1;
+        color: #313338;
+        font-size: 0.625rem;
+        font-weight: 600;
+        line-height: 1.3;
     }
 </style>

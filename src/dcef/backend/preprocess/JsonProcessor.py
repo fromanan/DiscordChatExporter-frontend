@@ -2,8 +2,10 @@
 
 import copy
 import functools
+import hashlib
 from itertools import zip_longest
 import os
+import re
 import ijson
 from pprint import pprint
 
@@ -54,6 +56,46 @@ class JsonProcessor:
 		guild["_id"] = Formatters.pad_id(guild.pop("id"))
 		self.asset_processor.set_guild_id(guild["_id"])
 		guild["icon"] = self.asset_processor.process(guild.pop("iconUrl"), is_searchable=False)
+
+		special_channel_ids = guild.get("specialChannelIds") or {}
+		for key, value in special_channel_ids.items():
+			special_channel_ids[key] = Formatters.pad_id(value)
+
+		server_guide = guild.get("serverGuide")
+		if server_guide:
+			server_guide["authorIds"] = [
+				Formatters.pad_id(value)
+				for value in server_guide.get("authorIds", [])
+			]
+			for entry in server_guide.get("actions", []) + server_guide.get("resourceChannels", []):
+				entry["channelId"] = Formatters.pad_id(entry.get("channelId"))
+
+		onboarding = guild.get("onboarding")
+		if onboarding:
+			onboarding["defaultChannelIds"] = [
+				Formatters.pad_id(value)
+				for value in onboarding.get("defaultChannelIds", [])
+			]
+			onboarding["selectedOptionIds"] = [
+				Formatters.pad_id(value)
+				for value in onboarding.get("selectedOptionIds", [])
+			]
+			for prompt in onboarding.get("prompts", []):
+				prompt["id"] = Formatters.pad_id(prompt.get("id"))
+				for option in prompt.get("options", []):
+					option["id"] = Formatters.pad_id(option.get("id"))
+					option["role_ids"] = [
+						Formatters.pad_id(value)
+						for value in option.get("role_ids", [])
+					]
+					option["channel_ids"] = [
+						Formatters.pad_id(value)
+						for value in option.get("channel_ids", [])
+					]
+
+		for role in guild.get("roles", []):
+			role["_id"] = Formatters.pad_id(role.pop("id"))
+			role["guildId"] = guild["_id"]
 		return guild
 
 	def process_channel(self, channel, guild_id):
@@ -61,8 +103,51 @@ class JsonProcessor:
 		process channel info
 		does not contain messages
 		"""
+		raw_name = channel.get("name", "")
+		is_private_label = bool(re.search(r"\bprivate channel\b", raw_name, re.IGNORECASE))
+		is_locked_label = is_private_label or bool(
+			re.search(r"\(\s*locked\s*\)", raw_name, re.IGNORECASE)
+		)
+		channel["name"] = re.sub(
+			r"\s+\((?:category|text channel|voice channel|announcement channel|forum channel|stage channel|media channel)\)"
+			r"(?:\s*,?\s*(?:private channel)?\s*(?:\(\s*locked\s*\))?\s*(?:\(\s*\d+\s+messages?\s*\))?)*\s*$",
+			"",
+			raw_name,
+			flags=re.IGNORECASE,
+		).strip()
+		channel["name"] = re.sub(
+			r"\s*,?\s*private channel(?:\s*\(\s*locked\s*\))?(?:\s*\(\s*\d+\s+messages?\s*\))?\s*$",
+			"",
+			channel["name"],
+			flags=re.IGNORECASE,
+		).strip()
+		channel["name"] = re.sub(
+			r"\s*\(\s*locked\s*\)(?:\s*\(\s*\d+\s+messages?\s*\))?\s*$",
+			"",
+			channel["name"],
+			flags=re.IGNORECASE,
+		).strip()
+		channel["name"] = re.sub(
+			r"\s*\(\s*\d+\s+messages?\s*\)\s*$",
+			"",
+			channel["name"],
+			flags=re.IGNORECASE,
+		).strip()
+		channel["isPrivate"] = bool(channel.get("isPrivate") or is_private_label)
+		channel["isLocked"] = bool(
+			channel.get("isLocked") or is_locked_label or channel["isPrivate"]
+		)
+		channel["channelType"] = channel.get("channelType") or {
+			"GuildVoiceChat": "VoiceChannel",
+			"GuildStageVoice": "VoiceChannel",
+			"GuildNewsThread": "Threads",
+			"GuildPublicThread": "Threads",
+			"GuildPrivateThread": "Threads",
+			"GuildForum": "Forums",
+			"GuildMedia": "Forums",
+		}.get(channel.get("type"), "TextChannel")
 		channel["_id"] = Formatters.pad_id(channel.pop("id"))
-		channel["categoryId"] = Formatters.pad_id(channel["categoryId"])
+		channel["categoryId"] = Formatters.pad_id(channel.get("categoryId"))
 		channel["guildId"] = guild_id
 		return channel
 
@@ -272,29 +357,30 @@ class JsonProcessor:
 		authors = {}
 
 		for message in messages:
+			if "author" not in message:
+				continue
 			author_copy = copy.deepcopy(message["author"])
-			if "author" in message:
 
-				# process avatar in message
-				author = message["author"]
-				author["avatar"] = self.asset_processor.process(author.pop("avatarUrl"), is_searchable=False)
-				message["author"] = author
+			# process avatar in message
+			author = message["author"]
+			author["avatar"] = self.asset_processor.process(author.pop("avatarUrl"), is_searchable=False)
+			message["author"] = author
 
 
-				# extract all authors for search
-				if author_copy["_id"] in authors:
-					# save new nickname if different. Ignore null nicknames (discordless exports)
-					if message["author"]["nickname"] not in authors[author_copy["_id"]]["nicknames"] and message["author"]["nickname"] != None:
-						authors[author["_id"]]["nicknames"].append(message["author"]["nickname"])
-					continue
+			# extract all authors for search
+			if author_copy["_id"] in authors:
+				# save new nickname if different. Ignore null nicknames (discordless exports)
+				if message["author"]["nickname"] not in authors[author_copy["_id"]]["nicknames"] and message["author"]["nickname"] != None:
+					authors[author["_id"]]["nicknames"].append(message["author"]["nickname"])
+				continue
 
-				author_copy["guildIds"] = [guild_id]
-				author_copy["avatar"] = self.asset_processor.process(author_copy.pop("avatarUrl"), is_searchable=False)
-				author_copy["names"] = [author_copy.pop("name") + "#" + author_copy.pop("discriminator")]
-				authors[author_copy["_id"]] = author_copy  # new author
+			author_copy["guildIds"] = [guild_id]
+			author_copy["avatar"] = self.asset_processor.process(author_copy.pop("avatarUrl"), is_searchable=False)
+			author_copy["names"] = [author_copy.pop("name") + "#" + author_copy.pop("discriminator")]
+			authors[author_copy["_id"]] = author_copy  # new author
 
-				author_copy["nicknames"] = [author_copy.pop("nickname")]
-				author_copy["nicknames"] = list(filter(None, author_copy["nicknames"]))   # remove null nicknames (discordless exports)
+			author_copy["nicknames"] = [author_copy.pop("nickname")]
+			author_copy["nicknames"] = list(filter(None, author_copy["nicknames"]))   # remove null nicknames (discordless exports)
 
 		# dictionary to list
 		authors_list = []
@@ -358,7 +444,7 @@ class JsonProcessor:
 
 		if existing_guild is None:
 			guild["msg_count"] = 0
-		elif existing_guild['exported_at'] < exported_at:
+		elif existing_guild.get("exported_at", existing_guild.get("exportedAt", "")) < exported_at:
 			guild["msg_count"] = existing_guild["msg_count"]
 		else:
 			# guild is up to date
@@ -377,7 +463,7 @@ class JsonProcessor:
 
 		if existing_channel is None:
 			channel["msg_count"] = 0
-		elif existing_channel['exportedAt'] < exported_at:
+		elif existing_channel.get("exportedAt", "") < exported_at:
 			channel["msg_count"] = existing_channel["msg_count"]
 		else:
 			# channel is up to date
@@ -555,6 +641,9 @@ class JsonProcessor:
 			channel = self.process_channel(channel, guild["_id"])
 			guild['exportedAt'] = exported_at
 			channel['exportedAt'] = exported_at
+			for role in guild.get("roles", []):
+				role["exportedAt"] = exported_at
+				self.insert_role(role)
 
 			current_batch = 0
 			roles = {}  # role_id -> role_object
@@ -573,6 +662,13 @@ class JsonProcessor:
 
 			new_channel_ids = set()
 			# print('        this channel was in', len(old_channel_ids_by_source), 'previous exports')
+
+			# Persist channel and guild metadata even when the export contains no
+			# messages (categories, forums, and newly observed empty channels).
+			# Message batches still rely on these records already existing so
+			# their counters can be incremented below.
+			self.insert_channel(channel, exported_at)
+			self.insert_guild(guild, exported_at)
 
 			# first 10 characters of sha256 hash of self.json_path
 			# we need to keep this short, because deleted messages sorter uses this as a key and it would use too much memory
@@ -595,12 +691,6 @@ class JsonProcessor:
 					emojis = self.process_emojis(messages)
 					# print('        processing roles')
 					roles = self.process_roles(messages, guild["_id"], exported_at, roles)
-
-					if current_batch == 0:
-						# channel needs to be inserted before messages,
-						# because we count the messages per channel in insert_message()
-						self.insert_channel(channel, exported_at)
-						self.insert_guild(guild, exported_at)
 
 					# authors needs to be inserted before messages,
 					# because we count the messages per author in insert_message()

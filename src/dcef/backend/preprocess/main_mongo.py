@@ -2,6 +2,7 @@ import os
 import sys
 import functools
 import time
+import traceback
 
 from FileFinder import FileFinder
 from MongoDatabase import MongoDatabase
@@ -138,6 +139,7 @@ def main(input_dir):
 
 	for invalid_json in invalid_jsons:
 		jsons.remove(invalid_json)
+	jsons_count = len(jsons)
 
 	print(f"    found {jsons_count} new possible json channel exports")
 	print(f"    found {jsons_count_before - jsons_count} already processed json channel exports")
@@ -147,20 +149,29 @@ def main(input_dir):
 	asset_processor.set_fast_mode(True)  # don't process slow actions
 
 	processed_bytes = 0
+	processed_count = 0
 	with Eta(jsons_size, jsons_count) as eta:
 		for index, json_path in enumerate(jsons):
-			size = os.path.getsize(file_finder.add_base_directory(json_path))
-			processed_bytes += size
-			print(f"ETA {eta.calculate_eta().ljust(8)}  {(str(index + 1) + '/' + str(jsons_count)).ljust(9)} ({(str(round(processed_bytes / jsons_size * 100, 2)) + '%)').ljust(7)}  processing {json_path}")
+			size = 0
+			try:
+				size = os.path.getsize(file_finder.add_base_directory(json_path))
+				processed_bytes += size
+				progress = round(processed_bytes / jsons_size * 100, 2) if jsons_size else 100
+				print(f"ETA {eta.calculate_eta().ljust(8)}  {(str(index + 1) + '/' + str(jsons_count)).ljust(9)} ({(str(progress) + '%').ljust(7)}  processing {json_path}")
 
-			p = JsonProcessor(database, file_finder, json_path, asset_processor, index, jsons_count)
-			p.process()
-			eta.increment(size)
+				p = JsonProcessor(database, file_finder, json_path, asset_processor, index, jsons_count)
+				p.process()
+				processed_count += 1
+			except Exception:
+				print(f"    ERROR: Failed to preprocess '{json_path}'")
+				traceback.print_exc()
+			finally:
+				eta.increment(size)
 
 	print("preprocess done")
-	if jsons_count > 0:
+	if processed_count > 0:
 		bump_archive_revision(database)
-	return jsons_count
+	return processed_count
 
 
 def print_help():
@@ -194,8 +205,12 @@ if __name__ == "__main__":
 	interval_seconds = max(1, int(os.environ.get("DCEF_WATCH_INTERVAL_SECONDS", "5")))
 
 	while True:
-		with Timer("Preprocess"):
-			main(input_dir)
+		try:
+			with Timer("Preprocess"):
+				main(input_dir)
+		except Exception:
+			print("ERROR: Preprocess pass failed; watcher will retry")
+			traceback.print_exc()
 		if not watch:
 			break
 		time.sleep(interval_seconds)

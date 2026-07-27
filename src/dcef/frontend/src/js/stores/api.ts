@@ -1,6 +1,19 @@
-import type { Author, Category, Channel } from "../interfaces";
+import type { Author, Category, Channel, Guild } from "../interfaces";
 
 const ARCHIVE_API_BASE_URL = import.meta.env.VITE_ARCHIVE_API_BASE_URL ?? "http://127.0.0.1:5178/api/v1";
+const emptyMessagePage = () => ({
+    prevPage: null,
+    messageIds: [],
+    nextPage: null,
+    messages: []
+});
+
+function requireOk(response: Response): Response {
+    if (!response.ok) {
+        throw new Error(`Archive API returned ${response.status} ${response.statusText}`);
+    }
+    return response;
+}
 
 export type OfflineMediaArchiveResult = "succeeded" | "persisted-view-update-deferred" | "pending" | "failed";
 
@@ -80,12 +93,7 @@ export async function fetchUserProfile(guildId: string, userId: string): Promise
 export async function fetchMessages(guildId: string | null, channelId: string, direction: "before" | "after" | "around" | "first" | "last", messageId: string | null = null, limit: number = 50) {
     if (channelId === null) {
         console.error("api - fetchMessageIds - channelId is null")
-        return {
-            prev_page_cursor: null,
-            messageIds: [],
-            next_page_cursor: null,
-            messages: []
-        }
+        return emptyMessagePage()
     }
     if (guildId === null) {
         guildId = "000000000000000000000000"
@@ -114,17 +122,13 @@ export async function fetchMessages(guildId: string | null, channelId: string, d
             response = await fetch(`/api/guild/messages?guild_id=${encodeURIComponent(guildId)}&channel_id=${encodeURIComponent(channelId)}&around_page_cursor=${encodeURIComponent(messageId)}&limit=${encodeURIComponent(limit)}`)
         }
 
+        requireOk(response)
         let retObj = await response.json()
         return retObj
     }
     catch (e) {
         console.error("api - Failed to fetch message ids", e)
-        return {
-            prev_page_cursor: null,
-            messageIds: [],
-            next_page_cursor: null,
-            messages: []
-        }
+        return emptyMessagePage()
     }
 }
 
@@ -156,12 +160,13 @@ export async function fetchSearch(guildId: string | null, prompt: string, direct
             response = await fetch(`/api/guild/search?guild_id=${encodeURIComponent(guildId)}&prompt=${encodeURIComponent(prompt)}&around_page_cursor=${encodeURIComponent(messageId)}&limit=${encodeURIComponent(limit)}`)
         }
 
+        requireOk(response)
         let messageIds = await response.json()
         return messageIds
     }
     catch (e) {
         console.error("api - Failed to fetch search", e)
-        return []
+        return emptyMessagePage()
     }
 }
 
@@ -179,14 +184,10 @@ export async function fetchSearchCount(guildId: string | null, prompt: string): 
     }
     try {
         let response = await fetch(`/api/guild/search/count?guild_id=${encodeURIComponent(guildId)}&prompt=${encodeURIComponent(prompt)}`)
+        requireOk(response)
         let count = await response.text()
-        // if numeric, return as number
-        try {
-            return Number(count)
-        }
-        catch (e) {
-            return "error"
-        }
+        const numericCount = Number(count)
+        return Number.isFinite(numericCount) ? numericCount : "error"
     }
     catch (e) {
         console.error("api - Failed to fetch search count", e)
@@ -200,6 +201,7 @@ export async function fetchAutocomplete(guildId: string | null, key: string, val
     }
     try {
         let response = await fetch(`/api/guild/search/autocomplete?guild_id=${encodeURIComponent(guildId)}&key=${encodeURIComponent(key)}&value=${encodeURIComponent(value)}&limit=${encodeURIComponent(limit)}`)
+        requireOk(response)
         let json = await response.json()
         return json
     }
@@ -211,9 +213,10 @@ export async function fetchAutocomplete(guildId: string | null, key: string, val
 
 
 
-export async function fetchGuilds() {
+export async function fetchGuilds(): Promise<Guild[]> {
     try {
         const response = await fetch('/api/guilds')
+        requireOk(response)
         const guilds = await response.json()
         console.log("guilds", guilds);
         return guilds
@@ -225,19 +228,32 @@ export async function fetchGuilds() {
     return []
 }
 
+function isThreadChannel(channel: Channel): boolean {
+    return channel.type === "GuildNewsThread"
+        || channel.type === "GuildPublicThread"
+        || channel.type === "GuildPrivateThread"
+}
 
-export async function fetchCategoriesChannelsThreads(guildId: string): Promise<Category[]> {
+export async function fetchCategoriesChannelsThreads(guildId: string | null): Promise<Category[]> {
     if (guildId === null) {
         guildId = "000000000000000000000000"
     }
     console.log("aaaaaa fetchCategoriesChannelsThreads", guildId);
     try {
-        const response = await fetch(`/api/guild/channels?guild_id=${guildId}`)
+        const response = await fetch(`/api/guild/channels?guild_id=${encodeURIComponent(guildId)}`)
+        requireOk(response)
         let json_response: Channel[] = await response.json()
+        json_response = json_response.filter(channel => channel.isHidden !== true)
 
-        let categories_temp = []
-        let channels_temp = []
-        let lost_threads = []
+        for (const channel of json_response) {
+            channel.categoryId = channel.categoryId ?? "0"
+            channel.category = channel.category?.trim()
+                || (isThreadChannel(channel) ? "Unknown parent" : "Uncategorized")
+        }
+
+        let categories_temp: Category[] = []
+        let channels_temp: Channel[] = []
+        let lost_threads: Channel[] = []
 
 
 
@@ -248,22 +264,40 @@ export async function fetchCategoriesChannelsThreads(guildId: string): Promise<C
                 name: "Direct Messages",
                 channels: [],
                 msg_count: 0,
+                position: 0,
             }
             categories_temp.push(category)
         }
         else {
             let found_categories_ids: string[] = []
             for (let channel of json_response) {
-                if (channel.type !== "GuildPublicThread" && channel.type !== "GuildPrivateThread") {
+                if (!isThreadChannel(channel)) {
                     if (!found_categories_ids.includes(channel.categoryId)) {
                         let category = {
                             _id: channel.categoryId,
                             name: channel.category,
                             channels: [],
                             msg_count: 0,
+                            position: channel.categoryOrder
+                                ?? channel.categoryPosition
+                                ?? channel.position
+                                ?? Number.MAX_SAFE_INTEGER,
+                            categoryOrder: channel.categoryOrder,
                         }
                         categories_temp.push(category)
                         found_categories_ids.push(channel.categoryId)
+                    }
+                    else {
+                        const category = categories_temp.find(candidate => candidate._id === channel.categoryId)
+                        if (category) {
+                            category.position = Math.min(
+                                category.position ?? Number.MAX_SAFE_INTEGER,
+                                channel.categoryOrder
+                                    ?? channel.categoryPosition
+                                    ?? channel.position
+                                    ?? Number.MAX_SAFE_INTEGER)
+                            category.categoryOrder ??= channel.categoryOrder
+                        }
                     }
                 }
             }
@@ -271,7 +305,7 @@ export async function fetchCategoriesChannelsThreads(guildId: string): Promise<C
 
         // create channels (excluding threads)
         for (let channel of json_response) {
-            if (channel.type !== "GuildPublicThread" && channel.type !== "GuildPrivateThread") {
+            if (!isThreadChannel(channel)) {
                 channel["threads"] = []
                 if (guildId === "000000000000000000000000") {
                     channel["categoryId"] = '0'
@@ -282,7 +316,7 @@ export async function fetchCategoriesChannelsThreads(guildId: string): Promise<C
 
         // add threads to their respective channels
         for (let channel of json_response) {
-            if (channel.type === "GuildPublicThread" || channel.type === "GuildPrivateThread") {
+            if (isThreadChannel(channel)) {
                 let parent_channel = channels_temp.find((c) => c._id === channel.categoryId)
                 if (parent_channel) {
                     parent_channel.msg_count += channel.msg_count
@@ -312,9 +346,11 @@ export async function fetchCategoriesChannelsThreads(guildId: string): Promise<C
             categories_temp.push({
                 _id: '0',
                 name: 'Lost threads / forums',
+                msg_count,
+                position: Number.MAX_SAFE_INTEGER,
                 channels: [{
                     _id: '0',
-                    type: 'GuildTextChat',
+                    type: 'GuildTextChat' as const,
                     categoryId: '0',
                     category: 'Lost threads / forums',
                     name: 'Lost threads / forums',
@@ -327,11 +363,28 @@ export async function fetchCategoriesChannelsThreads(guildId: string): Promise<C
         }
 
         console.log("categories", categories_temp);
-        categories_temp = categories_temp.sort((a, b) => b.msg_count - a.msg_count)
+        categories_temp = categories_temp.sort((a, b) => {
+            const position = (a.position ?? Number.MAX_SAFE_INTEGER)
+                - (b.position ?? Number.MAX_SAFE_INTEGER)
+            return position !== 0 ? position : a.name.localeCompare(b.name)
+        })
         categories_temp.forEach((category) => {
-            category.channels = category.channels.sort((a, b) => b.msg_count - a.msg_count)
+            category.channels = category.channels.sort((a, b) => {
+                const position = (a.channelOrder ?? a.sidebarOrder ?? a.position
+                    ?? Number.MAX_SAFE_INTEGER)
+                    - (b.channelOrder ?? b.sidebarOrder ?? b.position
+                        ?? Number.MAX_SAFE_INTEGER)
+                return position !== 0 ? position : a.name.localeCompare(b.name)
+            })
             category.channels.forEach((channel) => {
-                channel.threads = channel.threads.sort((a, b) => b.msg_count - a.msg_count)
+                channel.threads = channel.threads.sort((a, b) => {
+                    if (channel.type === "GuildForum" || channel.type === "GuildMedia") {
+                        const bCreated = Date.parse(b.createdAt ?? "") || 0
+                        const aCreated = Date.parse(a.createdAt ?? "") || 0
+                        return bCreated - aCreated
+                    }
+                    return b.msg_count - a.msg_count
+                })
             })
         })
 

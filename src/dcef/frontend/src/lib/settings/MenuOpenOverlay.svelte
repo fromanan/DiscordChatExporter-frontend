@@ -4,7 +4,7 @@
 	const layoutState = getLayoutState()
 </script>
 
-<div id="menu-open-overlay" style={"left:" + String(leftOffset) + "px"} class:hidden={!layoutState.settingssidemenushown} on:click={layoutState.hideSettingsSideMenu}/>
+<div id="menu-open-overlay" style={"left:" + String(leftOffset) + "px"} class:hidden={!layoutState.settingssidemenushown} on:click={layoutState.hideSettingsSideMenu}></div>
 
 <style>
     #menu-open-overlay {

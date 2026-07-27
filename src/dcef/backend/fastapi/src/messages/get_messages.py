@@ -1,5 +1,5 @@
 import re
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from ..common.helpers import pad_id
 from ..common.cursor_pagination import cursor_pagination
@@ -28,9 +28,9 @@ async def get_messages_cursor_pagination(channel_id: str, guild_id: str, prev_pa
 
 	#### ------------ INPUT VALIDATION ------------ ####
 	if re.match(r"^\d+$", guild_id) is None:
-		raise Exception("guild_id is not numeric")
+		raise HTTPException(status_code=400, detail="guild_id is not numeric")
 	if re.match(r"^\d+$", channel_id) is None:
-		raise Exception("channel_id is not numeric")
+		raise HTTPException(status_code=400, detail="channel_id is not numeric")
 	#### ------------ end INPUT VALIDATION ------------ ####
 
 	guild_id = pad_id(guild_id)

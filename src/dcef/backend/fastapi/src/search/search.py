@@ -10,7 +10,7 @@ from ..common.enrich_messages import enrich_messages_with_referenced
 from ..common.helpers import pad_id, print_json
 from ..common.Database import Database
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from ..common.Database import Database
 
@@ -282,7 +282,7 @@ def extend_reactions(reaction_ids: list, reactions: list, guild_id: str):
 
 	or_ = []
 	for reaction in reactions:
-		or_.append({"name": {"$regex": f"^{reaction}$", "$options": "i"}})
+		or_.append({"name": {"$regex": f"^{re.escape(reaction)}$", "$options": "i"}})
 
 	query = {"$or": or_}
 
@@ -453,8 +453,9 @@ async def search_messages_(guild_id: str, prompt: str = None, prev_page_cursor: 
 			# match partial filenames
 			or_ = []
 			for filename in filenames:
-				or_.append({"attachments.filenameWithoutHash": {"$regex": filename, "$options": "i"}})
-				or_.append({"embeds.thumbnail.filenameWithoutHash": {"$regex": filename, "$options": "i"}})
+				escaped_filename = re.escape(filename)
+				or_.append({"attachments.filenameWithoutHash": {"$regex": escaped_filename, "$options": "i"}})
+				or_.append({"embeds.thumbnail.filenameWithoutHash": {"$regex": escaped_filename, "$options": "i"}})
 
 			query["$and"].append({"$or": or_})
 
@@ -551,23 +552,24 @@ async def search_messages_(guild_id: str, prompt: str = None, prev_page_cursor: 
 		if len(message_contains) > 0:
 			and_ = []
 			for message_should_contain in message_contains:
+				escaped_message = re.escape(message_should_contain)
 				and_.append({
 					"$or": [
 						{
 							"content.content": {
-								"$regex": message_should_contain,
+								"$regex": escaped_message,
 								"$options": "i"
 							}
 						},
 						{
 							"embeds.title": {
-								"$regex": message_should_contain,
+								"$regex": escaped_message,
 								"$options": "i"
 							},
 						},
 						{
 							"embeds.description": {
-								"$regex": message_should_contain,
+								"$regex": escaped_message,
 								"$options": "i"
 							},
 						},
@@ -592,5 +594,5 @@ async def search_messages_(guild_id: str, prompt: str = None, prev_page_cursor: 
 	except Exception as e:
 		print("/search error:")
 		traceback.print_exc()
-		return ["error"]
+		raise HTTPException(status_code=400, detail="Invalid search query") from e
 

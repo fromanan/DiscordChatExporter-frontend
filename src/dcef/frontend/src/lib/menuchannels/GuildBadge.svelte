@@ -3,9 +3,10 @@
 
     interface Props {
         guild: Guild;
+        showTooltip?: boolean;
     }
 
-    let { guild }: Props = $props();
+    let { guild, showTooltip = true }: Props = $props();
 
     const badgeUrls = {
         Community: {
@@ -66,13 +67,15 @@
 </script>
 
 {#if badgeUrl}
-    <span class="server-badge" aria-label={label} tabindex="0">
+    <span class="server-badge" aria-label={label} tabindex={showTooltip ? 0 : undefined}>
         <img src={badgeUrl} alt="" />
-        <span class="tooltip" role="tooltip">
-            <strong>{label}</strong>
-            {#if description}<span>{description}</span>{/if}
-            {#if boostLabel}<span>{boostLabel}</span>{/if}
-        </span>
+        {#if showTooltip}
+            <span class="tooltip" role="tooltip">
+                <strong>{label}</strong>
+                {#if description}<span>{description}</span>{/if}
+                {#if boostLabel}<span>{boostLabel}</span>{/if}
+            </span>
+        {/if}
     </span>
 {/if}
 
@@ -97,11 +100,11 @@
         position: absolute;
         z-index: 20;
         top: calc(100% + 9px);
-        left: 50%;
+        left: 0;
         display: none;
         width: max-content;
-        max-width: 230px;
-        transform: translateX(-50%);
+        max-width: calc(min(236px, 100svw - 100px) - 16px);
+        box-sizing: border-box;
         padding: 9px 12px;
         border-radius: 5px;
         background: #111214;
@@ -117,7 +120,7 @@
         content: "";
         position: absolute;
         bottom: 100%;
-        left: 50%;
+        left: 11px;
         transform: translateX(-50%);
         border: 5px solid transparent;
         border-bottom-color: #111214;

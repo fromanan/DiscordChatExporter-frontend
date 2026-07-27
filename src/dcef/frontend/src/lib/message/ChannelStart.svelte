@@ -7,18 +7,21 @@
     const viewUserState = getViewUserState()
 
     export let isThread: boolean;
+    export let isForumPost = false;
     export let channelName: string;
     export let messageAuthor: Author
 
 </script>
 
 {#if isThread}
-    <div class="wrapper" data-messageid="first">
+    <div class="wrapper" class:forum-post={isForumPost} data-messageid="first">
         <div class="thread-icon">
-            <Icon name="channeltype/thread" width={30} />
+            <Icon name={isForumPost ? "channeltype/forum" : "channeltype/thread"} width={30} />
         </div>
-        <div class="title">{channelName}!</div>
-        <div class="subtitle">Started by <span class="subtitle-person"><MessageAuthorName author={messageAuthor} on:click={() => viewUserState.setUser(messageAuthor)} /></span></div>
+        <div class="title">{channelName}{isForumPost ? "" : "!"}</div>
+        {#if !isForumPost}
+            <div class="subtitle">Started by <span class="subtitle-person"><MessageAuthorName author={messageAuthor} on:click={() => viewUserState.setUser(messageAuthor)} /></span></div>
+        {/if}
     </div>
 {:else}
     <div class="wrapper" data-messageid="first">
@@ -61,6 +64,22 @@
         font-weight: 700;
         color: #F2F3F5;
         margin: 8px 0;
+    }
+    .forum-post {
+        margin-top: 28px;
+        margin-bottom: 22px;
+    }
+    .forum-post .thread-icon {
+        background: transparent;
+        width: 48px;
+        height: 48px;
+        margin-top: 0;
+        color: #b5bac1;
+    }
+    .forum-post .title {
+        margin-top: 12px;
+        font-size: 30px;
+        line-height: 1.2;
     }
     .subtitle {
         color: #B5BAC1;

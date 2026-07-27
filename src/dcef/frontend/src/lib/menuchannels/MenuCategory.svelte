@@ -48,12 +48,12 @@
                     isOpen = !isOpen
                 }
             },
-			{
+			...(/^\d+$/.test(id) ? [{
 				"name": "Copy category ID",
 				"action": () => {
 					copyTextToClipboard(BigInt(id))
 				}
-			},
+			}] : []),
 			{
 				"name": "Copy category name",
 				"action": () => {

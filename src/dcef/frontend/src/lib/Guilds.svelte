@@ -3,21 +3,23 @@
 <script lang="ts">
 	import { tick } from "svelte";
 	import { checkUrl, copyTextToClipboard } from "../js/helpers"
+	import type { Guild } from "../js/interfaces";
     import { getGuildState } from "../js/stores/guildState.svelte";
     import { contextMenuItems } from "../js/stores/menuStore";
     import { linkHandler } from "../js/stores/settingsStore.svelte";
     import Icon from "./icons/Icon.svelte";
+	import GuildBadge from "./menuchannels/GuildBadge.svelte";
 
-	let tooltip: { name: string, left: number, top: number } | null = null
+	let tooltip: { guild: Guild, left: number, top: number } | null = null
 	let tooltipElement: HTMLDivElement | null = null
 
-	async function showGuildTooltip(event: MouseEvent, name: string) {
+	async function showGuildTooltip(event: MouseEvent, guild: Guild) {
 		const guildElement = event.currentTarget as HTMLElement
 		const anchorElement = guildElement.querySelector("img") ?? guildElement
 		const anchorBounds = anchorElement.getBoundingClientRect()
 
 		tooltip = {
-			name,
+			guild,
 			left: anchorBounds.right + 8,
 			top: anchorBounds.top + anchorBounds.height / 2
 		}
@@ -74,7 +76,7 @@
 
 <div class="guilds" on:scroll={hideGuildTooltip}>
 	<div class="guild" class:selected={!guildState.guildId} on:click={e => changeGuildId(null)}>
-		<div class="guild-selected-indicator" />
+		<div class="guild-selected-indicator"></div>
 		<div class="home-guild"><Icon name="dcef/filled" width={22} /></div>
 	</div>
 	<hr>
@@ -85,12 +87,12 @@
 				<div
 					class="guild"
 					class:selected={guildState.guildId === guild._id}
-					on:mouseenter={e => showGuildTooltip(e, guild.name)}
+					on:mouseenter={e => showGuildTooltip(e, guild)}
 					on:mouseleave={hideGuildTooltip}
 					on:contextmenu|preventDefault={e=>onRightClick(e, guild._id)}
 					on:click={e => changeGuildId(guild._id)}
 				>
-					<div class="guild-selected-indicator" />
+					<div class="guild-selected-indicator"></div>
 					<img src={checkUrl(guild.icon)} alt={guild.name} on:error={handleGuildIconError} />
 				</div>
 			{/if}
@@ -106,7 +108,8 @@
 		style:left={`${tooltip.left}px`}
 		style:top={`${tooltip.top}px`}
 	>
-		{tooltip.name}
+		<GuildBadge guild={tooltip.guild} showTooltip={false} />
+		<span class="guild-tooltip-name">{tooltip.guild.name}</span>
 	</div>
 {/if}
 
@@ -205,6 +208,9 @@
 	.guild-tooltip {
 		position: fixed;
 		z-index: 100;
+		display: flex;
+		align-items: center;
+		gap: 6px;
 		max-width: min(240px, calc(100vw - 86px));
 		padding: 8px 10px;
 		border-radius: 4px;
@@ -217,6 +223,11 @@
 		overflow-wrap: anywhere;
 		pointer-events: none;
 		transform: translateY(-50%);
+	}
+
+	.guild-tooltip-name {
+		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 
 	.guild-tooltip::before {

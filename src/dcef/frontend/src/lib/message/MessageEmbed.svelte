@@ -126,7 +126,7 @@
                         loadedGifvUrl = null
                         failedGifvUrl = gifvUrl
                     }}
-                />
+                ></video>
             </div>
         {:else}
             <!-- workaround for older exports (embed tenor iframe) -->

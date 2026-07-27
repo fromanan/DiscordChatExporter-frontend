@@ -1,4 +1,5 @@
 import pymongo
+import re
 
 from ..common.Database import Database
 
@@ -13,7 +14,7 @@ def autocomplete_categories(guild_id: str, partial_category: str, limit: int):
 	# ignore "GuildPublicThread" or "GuildPrivateThread", because their category is channel name
 	query = {
 		"category": {
-			"$regex": partial_category,
+			"$regex": re.escape(partial_category),
 			"$options": "i"
 		},
 		"type": {
@@ -65,7 +66,7 @@ def autocomplete_channels(guild_id: str, partial_channel: str, limit: int):
 
 	query = {
 		"name": {
-			"$regex": partial_channel, "$options": "i"
+			"$regex": re.escape(partial_channel), "$options": "i"
 		}
 	}
 	cursor = collection_channels.find(query, {
@@ -95,7 +96,7 @@ def autocomplete_reactions(guild_id: str, partial_reaction: str, limit: int):
 
 	query = {
 		"name": {
-			"$regex": partial_reaction,
+			"$regex": re.escape(partial_reaction),
 			"$options": "i"
 		}
 	}
@@ -130,7 +131,7 @@ def autocomplete_filenames(guild_id: str, partial_filename: str, limit: int):
 	query = {
 		"searchable": True,
 		"filenameWithoutHash": {
-			"$regex": partial_filename,
+			"$regex": re.escape(partial_filename),
 			"$options": "i"
 		}
 	}
@@ -167,7 +168,7 @@ def autocomplete_extensions(guild_id: str, partial_extension: str, limit: int):
 	query = {
 		"searchable": True,
 		"extension": {
-			"$regex": partial_extension,
+			"$regex": re.escape(partial_extension),
 			"$options": "i"
 		}
 	}
@@ -212,12 +213,12 @@ def autocomplete_users(guild_id: str, partial_user_name: str, limit: int):
 		"$or": [
 			{
 				"names": {
-					"$regex": partial_user_name, "$options": "i"
+					"$regex": re.escape(partial_user_name), "$options": "i"
 				}
 			},
 			{
 				"nicknames": {
-					"$regex": partial_user_name, "$options": "i"
+					"$regex": re.escape(partial_user_name), "$options": "i"
 				}
 			}
 		],

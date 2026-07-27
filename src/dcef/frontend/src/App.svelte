@@ -7,6 +7,9 @@
     import HeaderMain from "./lib/HeaderMain.svelte";
     import SearchResults from "./lib/search/SearchResults.svelte";
     import Channel from "./lib/Channel.svelte";
+    import Forum from "./lib/Forum.svelte";
+    import ServerGuide from "./lib/ServerGuide.svelte";
+    import ChannelsAndRoles from "./lib/ChannelsAndRoles.svelte";
     import Thread from "./lib/Thread.svelte";
     import Settings from "./lib/settings/Settings.svelte";
     import ContextMenu from "./lib/components/menu/ContextMenu.svelte";
@@ -28,7 +31,7 @@
       });
 
       const unsubscribe2 = hideSpoilers.subscribe(value => {
-        document.documentElement.setAttribute('data-hidespoilers', value);
+        document.documentElement.setAttribute('data-hidespoilers', String(value));
       });
 
       const unsubscribe3 = font.subscribe(value => {
@@ -45,6 +48,9 @@
           const revision = await fetchArchiveRevision();
           if (revision === null) {
             return;
+          }
+          if (revision !== archiveRevision) {
+            await guildState.refreshArchiveIndex();
           }
           archiveRevision = revision;
         }
@@ -75,7 +81,7 @@
         : "Discord"
 
     /* capture mouse position for right click context menu */
-    function handleMousemove(event) {
+    function handleMousemove(event: MouseEvent) {
       $position = { x: event.clientX, y: event.clientY };
     }
     const handleThrottledMousemove = throttle(handleMousemove, 100, { leading: false, trailing: true });
@@ -115,7 +121,17 @@
       <div class="guilds"><Guilds /></div>
       <div class="channels"><MenuCategories /></div>
       <div class="header-main"><HeaderMain /></div>
-      <div class="channel"><Channel {archiveRevision} /></div>
+      <div class="channel">
+        {#if guildState.channel?.type === "GuildServerGuide"}
+          <ServerGuide />
+        {:else if guildState.channel?.type === "GuildChannelsAndRoles"}
+          <ChannelsAndRoles />
+        {:else if guildState.channel?.type === "GuildForum" || guildState.channel?.type === "GuildMedia"}
+          <Forum />
+        {:else}
+          <Channel {archiveRevision} />
+        {/if}
+      </div>
       <div class="search-results"><SearchResults /></div>
       <div class="thread"><Thread {archiveRevision} /></div>
       <div class="account-bar"><AccountSwitcher /></div>
@@ -220,7 +236,7 @@
     grid-template-areas:
     "guilds channels header-main    thread"
     "guilds channels        channel thread";
-    grid-template-columns: 70px 236px 1fr 1fr;
+    grid-template-columns: 70px 236px minmax(0, 1fr) clamp(340px, 28vw, 430px);
     grid-template-rows: 47px 1fr;
   }
   main.desktop.searchhidden.threadshown .search-results {

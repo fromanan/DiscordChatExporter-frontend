@@ -15,6 +15,9 @@
     let searchInput: SearchInput | undefined = $state();
 
     let showSearchBar = $derived(!searchState.searchManuallyHidden && layoutState.mobile)
+    let isSpecialPage = $derived(
+        guildState.channel?.type === "GuildServerGuide"
+        || guildState.channel?.type === "GuildChannelsAndRoles")
 
     async function focusSearch(event: KeyboardEvent) {
         if (
@@ -60,7 +63,7 @@
             {/if}
         </div>
         <div class="other-wrapper">
-            {#if guildState.channelId}
+            {#if guildState.channelId && !isSpecialPage}
                 <div class="pin-wrapper">
                     <div class="pin-btn icon" class:active={layoutState.channelpinnedshown} onclick={layoutState.toggleChannelPinned}>
                         <Icon name="systemmessage/pinned" width={19} />

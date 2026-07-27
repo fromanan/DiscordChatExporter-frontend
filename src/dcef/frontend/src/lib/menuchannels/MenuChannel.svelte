@@ -15,18 +15,25 @@
     let { channel }: MyProps = $props();
 
     let isOpen: boolean = $state(false)
+    let isForum = $derived(channel.type === "GuildForum" || channel.type === "GuildMedia")
+    let isSpecial = $derived(
+        channel.type === "GuildServerGuide"
+        || channel.type === "GuildChannelsAndRoles")
     const guildState = getGuildState()
     const layoutState = getLayoutState()
 
 
     async function toggle() {
-        isOpen = !isOpen
+        isOpen = isForum || isSpecial ? true : !isOpen
         if (isOpen) {
             if (guildState.channelId !== channel._id) {
                 await guildState.changeChannelId(channel._id, "last")
                 if (layoutState.mobile) {
                     layoutState.hideSidePanel()
                 }
+            }
+            else if (isForum && guildState.threadId) {
+                await guildState.changeThreadId(null, null)
             }
             await guildState.pushState()
         }
@@ -41,7 +48,17 @@
         }
     })
 
-    function onChannelRightClick(e, id: string, name: string) {
+    function onChannelRightClick(_event: MouseEvent, id: string, name: string) {
+        if (!/^\d+$/.test(id) || !guildState.guildId || !/^\d+$/.test(guildState.guildId)) {
+            $contextMenuItems = [{
+                "name": "Copy page name",
+                "action": () => {
+                    copyTextToClipboard(name)
+                }
+            }]
+            return
+        }
+
 		$contextMenuItems = [
             {
 				"name": `Open channel in discord ${$linkHandler === 'app' ? "app" : "web"}`,
@@ -76,11 +93,13 @@
         <ChannelIcon channel={channel} width={16} />
     </div><span title="{channel.name} ({channel.msg_count} messages)">{channel.name}</span>
 </div>
-{#each channel.threads as thread}
-    {#if isOpen || thread._id == guildState.threadId}
-        <MenuThread parentChannelId={channel._id} thread={thread} isLast={!isOpen || thread === channel.threads[channel.threads.length - 1]} />
-    {/if}
-{/each}
+{#if !isForum}
+    {#each channel.threads as thread}
+        {#if isOpen || thread._id == guildState.threadId}
+            <MenuThread parentChannelId={channel._id} thread={thread} isLast={!isOpen || thread === channel.threads[channel.threads.length - 1]} />
+        {/if}
+    {/each}
+{/if}
 
 <style>
 	.channel {

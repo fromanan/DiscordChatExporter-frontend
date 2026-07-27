@@ -1,5 +1,6 @@
 import pymongo
 import re
+from fastapi import HTTPException
 
 from src.common.enrich_messages import enrich_messages_with_referenced
 
@@ -12,18 +13,18 @@ def cursor_pagination(collection_messages, query: dict, prev_page_cursor: str | 
 	if prev_page_cursor is None and next_page_cursor is None and around_page_cursor is None:
 		next_page_cursor = pad_id(0) # by default start from the beginning
 		# raise Exception("Either prev_page_cursor, around_page_cursor or next_page_cursor must be provided")
-	if prev_page_cursor is not None and next_page_cursor is not None and around_page_cursor is not None:
-		raise Exception("Only one of around_page_cursor, prev_page_cursor or next_page_cursor can be provided")
+	if sum(cursor is not None for cursor in (prev_page_cursor, around_page_cursor, next_page_cursor)) > 1:
+		raise HTTPException(status_code=400, detail="Only one pagination cursor can be provided")
 
 	# validate message_id is numeric
 	if prev_page_cursor is not None and re.match(r"^\d+$", prev_page_cursor) is None:
-		raise Exception("prev_page_cursor is not numeric")
+		raise HTTPException(status_code=400, detail="prev_page_cursor is not numeric")
 
 	if next_page_cursor is not None and re.match(r"^\d+$", next_page_cursor) is None:
-		raise Exception("next_page_cursor  is not numeric")
+		raise HTTPException(status_code=400, detail="next_page_cursor is not numeric")
 
 	if around_page_cursor is not None and re.match(r"^\d+$", around_page_cursor) is None:
-		raise Exception("around_page_cursor is not numeric")
+		raise HTTPException(status_code=400, detail="around_page_cursor is not numeric")
 	#### ------------ end INPUT VALIDATION ------------ ####
 
 
@@ -35,7 +36,12 @@ def cursor_pagination(collection_messages, query: dict, prev_page_cursor: str | 
 		around_page_cursor = pad_id(around_page_cursor)
 	prevpage = None
 	nextpage = None
-	limit = int(limit)
+	try:
+		limit = int(limit)
+	except (TypeError, ValueError):
+		raise HTTPException(status_code=400, detail="limit is not an integer")
+	if limit < 1 or limit > 500:
+		raise HTTPException(status_code=400, detail="limit must be between 1 and 500")
 	msgs = []
 
 	print("LIMIT", limit)

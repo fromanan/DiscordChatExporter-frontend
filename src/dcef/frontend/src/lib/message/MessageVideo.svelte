@@ -36,7 +36,7 @@
     const audioplayerState = getAudioplayerState();
 
     let wrapper: HTMLDivElement;
-    let video: HTMLVideoElement;
+    let video = $state<HTMLVideoElement>(null!);
     let metadataWidth = $state<number | null>(attachment.width ?? null);
     let metadataHeight = $state<number | null>(attachment.height ?? null);
     let paused = $state(true);

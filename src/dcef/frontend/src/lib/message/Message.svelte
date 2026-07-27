@@ -15,8 +15,15 @@
         previousMessage: Message | null;
         mergeMessages?: boolean;
         showJump?: boolean;
+        originalPosterId?: string | null;
     }
-    let { message, previousMessage, mergeMessages=true, showJump=false}: MyProps = $props();
+    let {
+        message,
+        previousMessage,
+        mergeMessages=true,
+        showJump=false,
+        originalPosterId=null
+    }: MyProps = $props();
     const isDebugModeEnabled = typeof localStorage !== "undefined" && localStorage.getItem("DEBUG") === "1";
 
     function getMessageState(message: Message, previousMessage: Message | null) {
@@ -209,7 +216,7 @@
         {:else if messageState.isSystemNotification}
             <MessageSystemNotification message={message} />
         {:else}
-            <MessageOrdinary message={message} messageState={messageState} />
+            <MessageOrdinary {message} {messageState} {originalPosterId} />
         {/if}
         <!-- small debugging helper - show it using `localStorage.setItem("DEBUG", "1")` -->
         {#if isDebugModeEnabled}

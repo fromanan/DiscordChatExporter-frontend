@@ -18,7 +18,15 @@
 
 	export let message: Message;
 	export let messageState;
+	export let originalPosterId: string | null = null;
 	const viewUserState = getViewUserState();
+
+	function sameDiscordId(left: string | null | undefined, right: string | null | undefined): boolean {
+		if (!left || !right) {
+			return false;
+		}
+		return (left.replace(/^0+/, "") || "0") === (right.replace(/^0+/, "") || "0");
+	}
 
 	function isPollMessage(message: Message): boolean {
 		return getRenderablePollEmbed(message) !== null;
@@ -174,7 +182,12 @@
 	<div on:click style="width: 100%;">
 		{#if !messageState.shouldMerge}
 			<div class="authorline">
-				<MessageAuthorName author={message.author} on:click={() => viewUserState.setUser(message.author)} {messageState} />
+				<MessageAuthorName
+					author={message.author}
+					on:click={() => viewUserState.setUser(message.author)}
+					{messageState}
+					isOriginalPoster={sameDiscordId(message.author._id, originalPosterId)}
+				/>
 				<MessageTimestamp channelOrThreadId={message.channelId} timestamp={message.timestamp} messageId={message._id} />
 			</div>
 		{/if}

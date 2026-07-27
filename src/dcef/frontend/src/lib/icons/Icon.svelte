@@ -25,8 +25,13 @@
     import call from "./systemmessage/call.svg?raw"
     import pinned from "./systemmessage/pinned.svg?raw"
     import channel from "./channeltype/channel.svg?raw"
+    import channelLocked from "./channeltype/channelLocked.svg?raw"
     import channelWithThreads from "./channeltype/channelWithThreads.svg?raw"
+    import forum from "./channeltype/forum.svg?raw"
+    import guide from "./channeltype/guide.svg?raw"
+    import customize from "./channeltype/customize.svg?raw"
     import news from "./channeltype/news.svg?raw"
+    import rules from "./channeltype/rules.svg?raw"
     import voice from "./channeltype/voice.svg?raw"
     import thread from "./channeltype/thread.svg?raw"
     import poop from "./placeholder/poop.svg?raw"
@@ -73,8 +78,13 @@
                         "systemmessage/call" |
                         "systemmessage/pinned" |
                         "channeltype/channel" |
+                        "channeltype/channelLocked" |
                         "channeltype/channelWithThreads" |
+                        "channeltype/forum" |
+                        "channeltype/guide" |
+                        "channeltype/customize" |
                         "channeltype/news" |
+                        "channeltype/rules" |
                         "channeltype/voice" |
                         "channeltype/thread" |
                         "placeholder/poop" |
@@ -156,10 +166,20 @@
         {@html pinned}
     {:else if name === "channeltype/channel"}
         {@html channel}
+    {:else if name === "channeltype/channelLocked"}
+        {@html channelLocked}
     {:else if name === "channeltype/channelWithThreads"}
         {@html channelWithThreads}
+    {:else if name === "channeltype/forum"}
+        {@html forum}
+    {:else if name === "channeltype/guide"}
+        {@html guide}
+    {:else if name === "channeltype/customize"}
+        {@html customize}
     {:else if name === "channeltype/news"}
         {@html news}
+    {:else if name === "channeltype/rules"}
+        {@html rules}
     {:else if name === "channeltype/voice"}
         {@html voice}
     {:else if name === "channeltype/thread"}

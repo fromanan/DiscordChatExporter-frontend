@@ -433,6 +433,8 @@
     }
     .scroll-container {
         flex: 1;
+        position: relative;
+        z-index: 0;
         overflow-y: auto;
         padding-bottom: 16px;
         scroll-padding-bottom: 16px;

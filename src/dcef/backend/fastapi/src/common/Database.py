@@ -26,14 +26,16 @@ class Database:
 
 	@staticmethod
 	def get_allowlisted_guild_ids():
-		allowlisted_guild_ids = collection_config.find_one({"key": "allowlisted_guild_ids"})["value"]
+		config = collection_config.find_one({"key": "allowlisted_guild_ids"}) or {}
+		allowlisted_guild_ids = config.get("value", [])
 		allowlisted_guild_ids = [pad_id(id) for id in allowlisted_guild_ids]
 		return allowlisted_guild_ids
 
 
 	@staticmethod
 	def get_denylisted_user_ids():
-		denylisted_user_ids = collection_config.find_one({"key": "denylisted_user_ids"})["value"]
+		config = collection_config.find_one({"key": "denylisted_user_ids"}) or {}
+		denylisted_user_ids = config.get("value", [])
 		denylisted_user_ids = [pad_id(id) for id in denylisted_user_ids]
 		return denylisted_user_ids
 
