@@ -5,6 +5,8 @@
     import playerVolumeHigh from "./player/volumeHigh.svg?raw"
     import playerVolumeLow from "./player/volumeLow.svg?raw"
     import playerVolumeMuted from "./player/volumeMuted.svg?raw"
+    import playerFullscreen from "./player/fullscreen.svg?raw"
+    import playerFullscreenExit from "./player/fullscreenExit.svg?raw"
     import openLink from "./player/openLink.svg?raw"
     import filetypeArchive from "./filetype/archive.svg?raw"
     import filetypeAudio from "./filetype/audio.svg?raw"
@@ -51,6 +53,8 @@
                         "player/volumeHigh" |
                         "player/volumeLow" |
                         "player/volumeMuted" |
+                        "player/fullscreen" |
+                        "player/fullscreenExit" |
                         "player/openLink" |
                         "filetype/archive" |
                         "filetype/audio" |
@@ -93,6 +97,7 @@
         name: IconOptions;
         width: number;
         height?: number;
+        inline?: boolean;
     }
     let { name, width, height: inputHeight, inline=false }: MyProps = $props();
     let height = $derived(inputHeight ? inputHeight : width);
@@ -111,6 +116,10 @@
         {@html playerVolumeLow}
     {:else if name === "player/volumeMuted"}
         {@html playerVolumeMuted}
+    {:else if name === "player/fullscreen"}
+        {@html playerFullscreen}
+    {:else if name === "player/fullscreenExit"}
+        {@html playerFullscreenExit}
     {:else if name === "player/openLink"}
         {@html openLink}
     {:else if name === "filetype/archive"}

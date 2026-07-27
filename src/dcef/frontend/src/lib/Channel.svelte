@@ -8,6 +8,12 @@
     import ChannelStart from "./message/ChannelStart.svelte";
     import Message from "./message/Message.svelte";
 
+    interface MyProps {
+        archiveRevision: number | null
+    }
+
+    let { archiveRevision }: MyProps = $props()
+
     const guildState = getGuildState()
     const layoutState = getLayoutState()
 
@@ -17,6 +23,10 @@
 
     async function fetchMessagesWrapper(direction: "before" | "after" | "around" | "first" | "last", messageId: string | null = null, limit: number) {
         return fetchMessages(apiGuildId, apiChannelId, direction, messageId, limit)
+    }
+
+    function replaceViewportState(messageId: string, offset: number) {
+        return guildState.replaceViewportState("channel", messageId, offset)
     }
 </script>
 
@@ -53,7 +63,10 @@
                 {#key apiChannelId}
                     <InfiniteScroll3
                         fetchMessages={fetchMessagesWrapper}
+                        {archiveRevision}
                         scrollToMessageId={guildState.channelMessageId}
+                        scrollOffset={guildState.channelMessageOffset}
+                        onViewportChange={replaceViewportState}
                         snippetMessage={renderMessageSnippet2}
                         channelStartSnippet={channelStartSnippet}
                     />
@@ -61,12 +74,16 @@
             {/key}
         {/if}
     </div>
+    <div class="message-composer-placeholder" aria-hidden="true"></div>
 </div>
 
 
 <style>
     .channel-wrapper {
+        display: flex;
+        flex-direction: column;
         height: 100%;
+        background-color: #313338;
         overflow: hidden;
     }
 
@@ -74,7 +91,14 @@
         border-bottom-right-radius: 8px;
     }
     .channel {
+        flex: 1;
+        min-height: 0;
         background-color: #313338;
-        height: 100%;
+    }
+    .message-composer-placeholder {
+        flex: 0 0 56px;
+        margin: 12px 12px 16px;
+        border-radius: 8px;
+        background-color: #232428;
     }
 </style>

@@ -144,6 +144,54 @@ def create_dir_if_not_exists(path):
 	if not os.path.exists(path):
 		os.makedirs(path)
 
+def is_supported_mongodb_filesystem(path):
+	if os.name != "nt":
+		return True
+
+	root_path = os.path.splitdrive(os.path.realpath(path))[0] + "\\"
+	filesystem_name = ctypes.create_unicode_buffer(261)
+	success = ctypes.windll.kernel32.GetVolumeInformationW(
+		root_path,
+		None,
+		0,
+		None,
+		None,
+		None,
+		filesystem_name,
+		len(filesystem_name)
+	)
+	return bool(success) and filesystem_name.value in ("NTFS", "ReFS")
+
+def is_mongodb_directory_candidate(path):
+	if not path or not os.path.isdir(path) or not is_supported_mongodb_filesystem(path):
+		return False
+
+	probe_path = os.path.join(path, f".dcef-write-probe-{os.getpid()}.tmp")
+	try:
+		with open(probe_path, "x"):
+			pass
+		os.remove(probe_path)
+		return True
+	except OSError:
+		if os.path.exists(probe_path):
+			os.remove(probe_path)
+		return False
+
+def get_mongodb_path():
+	override_path = os.environ.get("DCEF_MONGODB_PATH")
+	if override_path:
+		return os.path.realpath(override_path)
+
+	exports_path = os.environ.get("DCEF_EXPORTS_DIR")
+	if is_mongodb_directory_candidate(exports_path):
+		return os.path.realpath(os.path.join(exports_path, ".dcef", "mongodb"))
+
+	return os.path.realpath(os.path.join(
+		os.environ.get("LOCALAPPDATA", BASE_DIR),
+		"DCEF",
+		"mongodb"
+	))
+
 def runner(name, args, cwd):
 	custom_print("windows-runner:", name + " started")
 	args = ['cmd.exe', '/u','/c', 'cd', cwd, '&&'] + args
@@ -159,18 +207,21 @@ def runner(name, args, cwd):
 
 	custom_print("windows-runner:", name + ' finished')
 
-def start_preprocess():
+def start_preprocess(watch=False):
 	cwd = os.path.realpath(BASE_DIR + '/dcef/backend/preprocess')
 	args = ['dcefpreprocess.exe', 'windows']
+	if watch:
+		args.append('--watch')
 	th = threading.Thread(target=runner, args=('preprocess', args, cwd), daemon=False)
 	th.start()
 	return th
 
 def start_mongodb():
-	create_dir_if_not_exists(BASE_DIR + '/_temp/mongodb')
+	mongodb_path = get_mongodb_path()
+	create_dir_if_not_exists(mongodb_path)
 
 	cwd = os.path.realpath(BASE_DIR + '/dcef/backend/mongodb')
-	args = ['dcefmongod.exe', '--dbpath', "../../../_temp/mongodb"]
+	args = ['dcefmongod.exe', '--dbpath', mongodb_path]
 	th = threading.Thread(target=runner, args=('mongodb', args, cwd), daemon=False)
 	th.start()
 	return th
@@ -232,6 +283,7 @@ def main():
 
 
 		th_preprocess.join()  # Wait for preprocess to finish
+		th_preprocess_watch = start_preprocess(watch=True)
 
 		hide_console()
 		create_window()

@@ -11,6 +11,12 @@
     import ChannelStart from "./message/ChannelStart.svelte";
     import Message from "./message/Message.svelte";
 
+    interface MyProps {
+        archiveRevision: number | null
+    }
+
+    let { archiveRevision }: MyProps = $props()
+
     function destroyThreadView() {
         guildState.changeThreadId(null)
         guildState.pushState()
@@ -24,6 +30,10 @@
 
     export async function fetchMessagesWrapper(direction: "before" | "after" | "around" | "first" | "last", messageId: string | null = null, limit: number) {
         return fetchMessages(apiGuildId, apiThreadId, direction, messageId, limit)
+    }
+
+    function replaceViewportState(messageId: string, offset: number) {
+        return guildState.replaceViewportState("thread", messageId, offset)
     }
 </script>
 
@@ -56,14 +66,14 @@
                 </button>
             {/if}
             {#if guildState.thread?.name}
-                <ChannelIcon channel={guildState.thread} width={20} /><span>{guildState.thread.name}</span>
+                <ChannelIcon channel={guildState.thread} width={18} /><span>{guildState.thread.name}</span>
             {:else}
                 <span>Select a thread</span>
             {/if}
         </div>
         <div class="pin-wrapper">
             <div class="pin-btn" class:active={layoutState.threadpinnedshown} onclick={layoutState.toggleThreadPinned}>
-                <Icon name="systemmessage/pinned" width={24} />
+                <Icon name="systemmessage/pinned" width={20} />
             </div>
             {#if layoutState.threadpinnedshown}
                 <div class="pin-messages">
@@ -74,7 +84,7 @@
             {/if}
         </div>
         <div onclick={destroyThreadView} style="cursor:pointer; display: grid; place-items: center;">
-            <Icon name="modal/x" width={24} />
+            <Icon name="modal/x" width={20} />
         </div>
     </div>
     <div class="thread">
@@ -84,7 +94,10 @@
                 {#key guildState.threadMessageId}
                     <InfiniteScroll3
                         fetchMessages={fetchMessagesWrapper}
+                        {archiveRevision}
                         scrollToMessageId={guildState.threadMessageId}
+                        scrollOffset={guildState.threadMessageOffset}
+                        onViewportChange={replaceViewportState}
                         snippetMessage={renderMessageSnippet2}
                         channelStartSnippet={channelStartSnippet}
                     />
@@ -154,7 +167,8 @@
     .thread-name {
         display: flex;
         gap: 8px;
-        font-size: 16px;
+        font-size: 14px;
+        line-height: 18px;
         font-weight: 600;
         color: #F2F3F5;
         flex-grow: 3;

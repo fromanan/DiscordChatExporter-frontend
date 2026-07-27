@@ -1,13 +1,46 @@
 <!-- GUILDS MENU -->
 
 <script lang="ts">
+	import { tick } from "svelte";
 	import { checkUrl, copyTextToClipboard } from "../js/helpers"
     import { getGuildState } from "../js/stores/guildState.svelte";
     import { contextMenuItems } from "../js/stores/menuStore";
     import { linkHandler } from "../js/stores/settingsStore.svelte";
     import Icon from "./icons/Icon.svelte";
 
-	function onRightClick(e, id) {
+	let tooltip: { name: string, left: number, top: number } | null = null
+	let tooltipElement: HTMLDivElement | null = null
+
+	async function showGuildTooltip(event: MouseEvent, name: string) {
+		const guildElement = event.currentTarget as HTMLElement
+		const anchorElement = guildElement.querySelector("img") ?? guildElement
+		const anchorBounds = anchorElement.getBoundingClientRect()
+
+		tooltip = {
+			name,
+			left: anchorBounds.right + 8,
+			top: anchorBounds.top + anchorBounds.height / 2
+		}
+
+		await tick()
+
+		if (tooltip && tooltipElement) {
+			const tooltipBounds = tooltipElement.getBoundingClientRect()
+			const viewportPadding = 8
+			const halfHeight = tooltipBounds.height / 2
+
+			tooltip.top = Math.max(
+				viewportPadding + halfHeight,
+				Math.min(tooltip.top, window.innerHeight - viewportPadding - halfHeight)
+			)
+		}
+	}
+
+	function hideGuildTooltip() {
+		tooltip = null
+	}
+
+	function onRightClick(e: MouseEvent, id: string) {
         console.log("right click", id);
 		$contextMenuItems = [
 			{
@@ -25,6 +58,10 @@
 		]
 	}
 
+	function handleGuildIconError(event: Event) {
+		(event.currentTarget as HTMLImageElement).src = "/favicon.png"
+	}
+
 	const guildState = getGuildState()
 
 	async function changeGuildId(guildId: string | null) {
@@ -33,24 +70,45 @@
 	}
 </script>
 
-<div class="guilds">
+<svelte:window on:resize={hideGuildTooltip} />
+
+<div class="guilds" on:scroll={hideGuildTooltip}>
 	<div class="guild" class:selected={!guildState.guildId} on:click={e => changeGuildId(null)}>
 		<div class="guild-selected-indicator" />
-		<div class="home-guild"><Icon name="dcef/filled" width={30} /></div>
+		<div class="home-guild"><Icon name="dcef/filled" width={22} /></div>
 	</div>
 	<hr>
 
 	{#if guildState.guilds}
 		{#each guildState.guilds as guild}
 			{#if guild._id !== "000000000000000000000000"}
-				<div class="guild" on:contextmenu|preventDefault={e=>onRightClick(e, guild._id)} class:selected={guildState.guildId === guild._id} on:click={e => changeGuildId(guild._id)}>
+				<div
+					class="guild"
+					class:selected={guildState.guildId === guild._id}
+					on:mouseenter={e => showGuildTooltip(e, guild.name)}
+					on:mouseleave={hideGuildTooltip}
+					on:contextmenu|preventDefault={e=>onRightClick(e, guild._id)}
+					on:click={e => changeGuildId(guild._id)}
+				>
 					<div class="guild-selected-indicator" />
-					<img src={checkUrl(guild.icon)} alt={guild.name} on:error={e => (e.target.src = "/favicon.png")} />
+					<img src={checkUrl(guild.icon)} alt={guild.name} on:error={handleGuildIconError} />
 				</div>
 			{/if}
 		{/each}
 	{/if}
 </div>
+
+{#if tooltip}
+	<div
+		bind:this={tooltipElement}
+		class="guild-tooltip"
+		role="tooltip"
+		style:left={`${tooltip.left}px`}
+		style:top={`${tooltip.top}px`}
+	>
+		{tooltip.name}
+	</div>
+{/if}
 
 <style>
 	.guilds {
@@ -61,7 +119,7 @@
 		overflow-y: auto;
 		position: relative;
 
-		padding: 0 4px 7px 0;
+		padding: 0 4px 84px 0;
 		scrollbar-width: none; /* hide scrollbar - Firefox */
 
 		transition: left 0.2s ease-in-out;
@@ -77,8 +135,8 @@
 	.home-guild {
 		margin: 5px 5px 3px 2px;
 		border-radius: 50%;
-		width: 48px;
-		height: 48px;
+		width: 40px;
+		height: 40px;
 		transition: border-radius 0.2s ease-in-out;
 	}
 
@@ -142,5 +200,32 @@
 		height: 40px;
 		width: 10px;
 		transition: height 0.2s ease-in-out;
+	}
+
+	.guild-tooltip {
+		position: fixed;
+		z-index: 100;
+		max-width: min(240px, calc(100vw - 86px));
+		padding: 8px 10px;
+		border-radius: 4px;
+		background-color: #111214;
+		box-shadow: 0 8px 16px rgb(0 0 0 / 24%);
+		color: #f2f3f5;
+		font-size: 14px;
+		font-weight: 600;
+		line-height: 18px;
+		overflow-wrap: anywhere;
+		pointer-events: none;
+		transform: translateY(-50%);
+	}
+
+	.guild-tooltip::before {
+		content: "";
+		position: absolute;
+		top: 50%;
+		right: 100%;
+		border: 5px solid transparent;
+		border-right-color: #111214;
+		transform: translateY(-50%);
 	}
 </style>

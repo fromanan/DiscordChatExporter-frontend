@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { tick } from "svelte";
     import { getGuildState } from "../js/stores/guildState.svelte";
     import { getLayoutState } from "../js/stores/layoutState.svelte";
     import Pinned from "./Pinned.svelte";
@@ -11,10 +12,25 @@
     const layoutState = getLayoutState()
     const searchState = getSearchState();
 
-
+    let searchInput: SearchInput | undefined = $state();
 
     let showSearchBar = $derived(!searchState.searchManuallyHidden && layoutState.mobile)
 
+    async function focusSearch(event: KeyboardEvent) {
+        if (
+            event.defaultPrevented ||
+            event.altKey ||
+            !(event.ctrlKey || event.metaKey) ||
+            event.key.toLowerCase() !== "f"
+        ) {
+            return;
+        }
+
+        event.preventDefault();
+        searchState.showSearch();
+        await tick();
+        searchInput?.focusInput();
+    }
 
     function showSearch() {
         searchState.showSearch()
@@ -25,6 +41,7 @@
     }
 </script>
 
+<svelte:window onkeydown={focusSearch} />
 
 {#if !showSearchBar}
 <div class="header-main" class:threadshown={layoutState.threadshown}>
@@ -46,7 +63,7 @@
             {#if guildState.channelId}
                 <div class="pin-wrapper">
                     <div class="pin-btn icon" class:active={layoutState.channelpinnedshown} onclick={layoutState.toggleChannelPinned}>
-                        <Icon name="systemmessage/pinned" width={24} />
+                        <Icon name="systemmessage/pinned" width={19} />
                     </div>
                     {#if layoutState.channelpinnedshown}
                         <div class="pin-messages">
@@ -63,12 +80,12 @@
                 </button>
             {:else}
                 <div class="search-wrapper">
-                    <SearchInput />
+                    <SearchInput bind:this={searchInput} />
                 </div>
             {/if}
         </div>
     {:else}
-        <SearchInput />
+        <SearchInput bind:this={searchInput} />
     {/if}
 </div>
 
@@ -79,7 +96,7 @@
             <Icon name="systemmessage/leave" width={24} />
         </button>
         <div class="searchinput">
-            <SearchInput />
+            <SearchInput bind:this={searchInput} />
         </div>
     </div>
 {/if}
@@ -93,7 +110,7 @@
         gap: 8px;
         flex-direction: row;
         align-items: center;
-        padding: 0 15px;
+        padding: 0 12px 0 16px;
         box-sizing: border-box;
         gap: 5px;
         border-bottom: 1px solid #20222599;
@@ -135,6 +152,7 @@
     }
     .other-wrapper {
         display: flex;
+        align-items: center;
         gap: 4px;
     }
 
@@ -160,7 +178,7 @@
         display: flex;
         flex-direction: row;
         align-items: center;
-        padding: 0 15px;
+        padding: 0 12px 0 16px;
         box-sizing: border-box;
         gap: 5px;
         border-bottom: 1px solid #20222599;
@@ -173,10 +191,24 @@
 
     .channel-name {
         display: flex;
+        align-items: center;
         gap: 8px;
-        font-size: 16px;
+        font-size: 15px;
+        line-height: 18px;
         font-weight: 600;
         color: #F2F3F5;
         flex-grow: 3;
+        min-width: 0;
+    }
+
+    .channel-name :global(.icon) {
+        flex: 0 0 auto;
+    }
+
+    .channel-name span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 </style>

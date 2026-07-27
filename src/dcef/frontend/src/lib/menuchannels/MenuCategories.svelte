@@ -1,7 +1,6 @@
 <script lang="ts">
     import MenuCategory from "./MenuCategory.svelte";
     import MenuGuildName from "./MenuGuildName.svelte";
-    import AccountSwitcher from "../accountswitcher/AccountSwitcher.svelte";
     import { getGuildState } from "../../js/stores/guildState.svelte";
 
     const guildState = getGuildState()
@@ -17,7 +16,6 @@
             <MenuCategory category={category} />
         {/each}
     </div>
-    <AccountSwitcher />
 </div>
 
 
@@ -39,8 +37,10 @@
         font-weight: 600;
     }
     .categories-wrapper {
+        flex: 1;
+        min-height: 0;
         overflow-y: scroll;
-        height: 100%;
+        padding-bottom: 84px;
         box-sizing: border-box;
         margin-right: 11px;
     }

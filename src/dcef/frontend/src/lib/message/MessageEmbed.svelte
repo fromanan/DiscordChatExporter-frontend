@@ -7,12 +7,15 @@
     import Image from "../imagegallery/Image.svelte";
     import Icon from "../icons/Icon.svelte";
     import MessageVideo from "./MessageVideo.svelte";
+    import MediaLoadingSkeleton from "./MediaLoadingSkeleton.svelte";
+    import MediaArchiveIndicator from "./MediaArchiveIndicator.svelte";
 
     interface MyProps {
         embed: Embed;
         messageState: any;
+        messageId: string;
     }
-    let { embed, messageState }: MyProps = $props();
+    let { embed, messageState, messageId }: MyProps = $props();
 
     let fieldGroups = $derived.by(()=> {
         let groups = []
@@ -41,9 +44,14 @@
     })
 
     let playingVideo: boolean = $state(false)
+	let gifvLoaded = $state(false)
+	let gifvFailedToLoad = $state(false)
+	let gifvAspectRatio = $derived(`${embed.video?.width ?? 16} / ${embed.video?.height ?? 9}`)
+	let gifvWidth = $derived(embed.video?.width && embed.video?.height
+		? `min(${embed.video.width}px, 550px, ${(400 * embed.video.width) / embed.video.height}px, calc(100% - 20px))`
+		: "min(550px, calc(100% - 20px))")
 
     let authorIconFailedToLoad: boolean = $state(false)
-    let thumbnailFailedToLoad: boolean = $state(false)
     let footerIconFailedToLoad: boolean = $state(false)
 
     const spotifyRegex = /https:\/\/open\.spotify\.com\/track\/([a-zA-Z0-9]+)/
@@ -57,6 +65,13 @@
 
     const tenorRegex = /(?:https?:)?\/\/(?:www\.)?(?:tenor\.com)\/(?:view|watch)\/[%\w\-]+-(\d+)/
     let tenorId = $derived(embed.url?.match(tenorRegex)?.[1] ?? null)
+    let isGifv = $derived(
+        Boolean(embed.video) &&
+        (
+            Boolean(tenorId) ||
+            /^https?:\/\/(?:www\.)?giphy\.com\//i.test(embed.url ?? "")
+        )
+    )
 
     let smallThumbnail: boolean = $derived.by(() => {
         if (spotifyId) {
@@ -83,11 +98,6 @@
         authorIconFailedToLoad = true
     }
 
-    function onThumbnailError(e: Event) {
-        console.log('thumbnail error', e)
-        thumbnailFailedToLoad = true
-    }
-
     function onFooterIconError(e: Event) {
         console.log('footer icon error', e)
         footerIconFailedToLoad = true
@@ -95,9 +105,16 @@
 </script>
 
 <div class="main-wrapper">
-    {#if tenorId}
-        {#if embed.hasOwnProperty('video')}
-            <video class="videogif" src="{checkUrl(embed.video)}" autoplay loop muted playsinline/>
+    {#if isGifv}
+        {#if embed.video}
+            <div class="gifv-wrapper" style:aspect-ratio={gifvAspectRatio} style:width={gifvWidth}>
+                <MediaArchiveIndicator asset={embed.video} {messageId} mediaKind="embed-video" />
+                {#if !gifvLoaded && !gifvFailedToLoad}
+                    <MediaLoadingSkeleton />
+                {/if}
+                <video class="videogif" class:loaded={gifvLoaded || gifvFailedToLoad} src="{checkUrl(embed.video)}" autoplay loop muted playsinline onloadeddata={() => gifvLoaded = true} onerror={() => gifvFailedToLoad = true}/>
+                <span class="gif-badge">GIF</span>
+            </div>
         {:else}
             <!-- workaround for older exports (embed tenor iframe) -->
             <div class="embed-tenor-container">
@@ -107,7 +124,7 @@
     {:else if spotifyId}
         <iframe class="spotify-iframe" src={`https://open.spotify.com/embed/track/${spotifyId}`} frameborder="0" sandbox="allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts" style="width: 400px; height: 80px;"></iframe>
     {:else if embed.video && embed.title === "" && embed.description === ""}
-        <MessageVideo attachment={embed.video} />
+        <MessageVideo attachment={embed.video} {messageId} mediaKind="embed-video" />
     {:else}
         <div class="embed" class:smallthumbnail={smallThumbnail} style="border-left: {embed.color} 4px solid;">
             <div class="header-row">
@@ -157,22 +174,18 @@
                 {#if embed.thumbnail && !playingVideo}
                     <div class="thumb-col">
                         <div class="thumbnail-wrapper">
-                            {#if thumbnailFailedToLoad}
-                                <Icon name="placeholder/poop" width={smallThumbnail ? 80 : 200} height={smallThumbnail ? 42 : 104} />
-                            {:else}
-                                <Image asset={embed.thumbnail} onerror={onThumbnailError} forceSpoiler={messageState.messageContentLinkIsSpoilered} class="global-embedthumb" />
-                                {#if embed.video}
-                                    <div class="pill">
-                                        {#if twitchClipId || youtubeId}
-                                            <button class="icon" onclick={playVideo}>
-                                                <Icon name="player/play" width={24} />
-                                            </button>
-                                        {/if}
-                                        <a class="icon" href={embed.url} target="_blank" rel="noopener noreferrer">
-                                            <Icon name="player/openLink" width={24} />
-                                        </a>
-                                    </div>
-                                {/if}
+                            <Image asset={embed.thumbnail} reserveSpace={true} showCloudIndicator={true} {messageId} mediaKind="embed-thumbnail" forceSpoiler={messageState.messageContentLinkIsSpoilered} class="global-embedthumb" />
+                            {#if embed.video}
+                                <div class="pill">
+                                    {#if twitchClipId || youtubeId}
+                                        <button class="icon" onclick={playVideo}>
+                                            <Icon name="player/play" width={24} />
+                                        </button>
+                                    {/if}
+                                    <a class="icon" href={embed.url} target="_blank" rel="noopener noreferrer">
+                                        <Icon name="player/openLink" width={24} />
+                                    </a>
+                                </div>
                             {/if}
                         </div>
                     </div>
@@ -180,7 +193,7 @@
 
                 {#if !embed.thumbnail && embed.video}
                     <div class="embed-video-2">
-                        <MessageVideo attachment={embed.video} />
+                        <MessageVideo attachment={embed.video} {messageId} mediaKind="embed-video" />
                     </div>
                 {/if}
 
@@ -203,7 +216,7 @@
 
             {#if embed.images.length > 0}
                 <div class="image-embeds-wrapper">
-                    <MessageTiledImages images={embed.images} isAttachment={false} />
+                    <MessageTiledImages images={embed.images} isAttachment={false} {messageId} mediaKind="embed-image" />
                 </div>
             {/if}
 
@@ -239,8 +252,35 @@
 		height: 100%;
 	}
     .videogif {
-        max-width: 550px;
+        max-width: min(550px, 100%);
+		max-height: 400px;
         width: 100%;
+        display: block;
+        border-radius: 4px;
+		opacity: 0;
+		transition: opacity 120ms ease-out;
+    }
+    .videogif.loaded {
+		opacity: 1;
+    }
+    .gifv-wrapper {
+        position: relative;
+        width: fit-content;
+        max-width: min(550px, 100%);
+		max-height: 400px;
+    }
+    .gif-badge {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        padding: 2px 5px;
+        border-radius: 3px;
+        background: rgba(30, 31, 34, 0.85);
+        color: #f2f3f5;
+        font-size: 14px;
+        font-weight: 700;
+        line-height: 20px;
+        pointer-events: none;
     }
     .embed-tenor-container {
 		pointer-events: none;

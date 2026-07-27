@@ -2,6 +2,11 @@ export interface Guild {
 	_id: string;
 	name: string;
 	icon: Asset;
+	features?: string[];
+	type?: "Community" | "DiscoverableCommunity" | "Partnered" | "Verified";
+	premiumTier?: number;
+	premiumSubscriptionCount?: number;
+	isBoosted?: boolean;
 	msg_count: number;
 }
 
@@ -14,6 +19,7 @@ export interface Category {
 export interface Asset {
 	_id: string;
 	originalPath: string;
+	canonicalUrl?: string;
 	localPath: string;
 	remotePath: string;
 	path: string;
@@ -24,6 +30,8 @@ export interface Asset {
 	sizeBytes: number;
 	filenameWithHash: string;
 	filenameWithoutHash: string;
+	mediaKey?: string;
+	isOffline?: boolean;
 	colorDominant: null | [number, number, number];
 	colorPalette: null | [number, number, number][];
 }
@@ -53,6 +61,8 @@ export interface Author {
 	isBot: boolean;
 	avatar: Asset;
 	roles?: Role[];
+	discriminator?: string;
+	msgCount?: number;
 	_id: string;
 }
 
@@ -121,6 +131,18 @@ export interface Embed {
 	};
 }
 
+export interface InvitePreview {
+	code: string;
+	guildId?: string | null;
+	name?: string | null;
+	icon?: Asset | null;
+	banner?: Asset | null;
+	onlineCount?: number | null;
+	memberCount?: number | null;
+	createdAt?: string | null;
+	description?: string | null;
+}
+
 export interface PollAnswer {
 	answer_id?: string | number;
 	id?: string | number;
@@ -177,6 +199,7 @@ export interface Message {
 	mentions: Mention[] | null;
 	attachments: Asset[] | null;
 	embeds: Embed[] | null;
+	invites?: InvitePreview[] | null;
 	reference: {
 		type?: string;
 		messageId: string;

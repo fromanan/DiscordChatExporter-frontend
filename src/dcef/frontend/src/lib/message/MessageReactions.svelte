@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { checkUrl } from "../../js/helpers";
+    import { getEmojiFallbackText, getEmojiImageUrl } from "../../js/emojis/emojiAssets";
     import type { Reaction } from "../../js/interfaces";
     import { currentUserId } from "../../js/stores/settingsStore.svelte";
     import ReactionsModal from "./ReactionsModal.svelte";
@@ -7,25 +7,45 @@
     export let reactions: Reaction[];
 
     let reactionsModal: ReactionsModal;
+    let visibleReactions: Reaction[];
+
+    $: visibleReactions = reactions.filter(reaction => (reaction.count ?? 0) > 0);
+
+    function isSyntheticAddReaction(reaction: Reaction): boolean {
+        return reaction.emoji?.name?.trim().toLowerCase() === "add reaction";
+    }
 </script>
 
 
-<ReactionsModal {reactions} bind:this={reactionsModal} />
+{#if visibleReactions.length > 0}
+    <ReactionsModal reactions={visibleReactions} bind:this={reactionsModal} />
 
-<div class="message-reactions">
-    {#each reactions as reaction}
-        {@const emojiUsers = reaction?.users?.map(user => user._id) ?? []}
-        <div class="message-reaction" class:me={emojiUsers.includes($currentUserId)} title=":{reaction.emoji.name}:" on:click={()=>reactionsModal.viewReactions(reaction)}>
-            <img
-                src={checkUrl(reaction.emoji?.image)}
-                alt="Avatar"
-                width="100%"
-                height="100%"
-            />
-            <span class="message-reaction-count">{reaction.count}</span>
-        </div>
-    {/each}
-</div>
+    <div class="message-reactions">
+        {#each visibleReactions as reaction}
+            {@const emojiUsers = reaction?.users?.map(user => user._id) ?? []}
+            {@const syntheticAddReaction = isSyntheticAddReaction(reaction)}
+            {@const emojiImageUrl = syntheticAddReaction ? "" : getEmojiImageUrl(reaction.emoji)}
+            <div class="message-reaction" class:me={emojiUsers.includes($currentUserId)} title={syntheticAddReaction ? `${reaction.count} reactions` : `:${reaction.emoji.name}:`} on:click={()=>reactionsModal.viewReactions(reaction)}>
+                {#if !syntheticAddReaction}
+                    {#if emojiImageUrl}
+                        <img
+                            src={emojiImageUrl}
+                            alt={`:${reaction.emoji.name}:`}
+                            title={`:${reaction.emoji.name}:`}
+                            width="100%"
+                            height="100%"
+                        />
+                    {:else}
+                        <span class="message-reaction-emoji" title={`:${reaction.emoji.name}:`}>
+                            {getEmojiFallbackText(reaction.emoji)}
+                        </span>
+                    {/if}
+                {/if}
+                <span class:count-only={syntheticAddReaction} class="message-reaction-count">{reaction.count}</span>
+            </div>
+        {/each}
+    </div>
+{/if}
 
 <style>
     .message-reactions {
@@ -55,13 +75,23 @@
         height: auto;
     }
 
+    .message-reaction-emoji {
+        width: 16px;
+        height: 16px;
+        line-height: 16px;
+        text-align: center;
+    }
+
     .message-reaction-count {
-        margin-left: 0.35rem;
         font-size: 16px;
         font-weight: 600;
         margin-left: 6px;
         text-align: center;
         color: #B5BAC1;
+    }
+
+    .message-reaction-count.count-only {
+        margin-left: 0;
     }
 
     .message-reaction:hover .message-reaction-count {

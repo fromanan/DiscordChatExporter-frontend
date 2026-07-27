@@ -4,6 +4,7 @@ mkdir -p /dcef/cache/db
 mongod --dbpath "/dcef/cache/db/" --wiredTigerCacheSizeGB 1.5 &
 cd /dcef/backend/preprocess
 python3.11 main_mongo.py docker
+python3.11 main_mongo.py docker --watch &
 cd /dcef/backend/fastapi
 python3.11 prod.py &
 echo "############################################################"

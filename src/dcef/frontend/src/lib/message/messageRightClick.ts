@@ -1,9 +1,9 @@
 import { get } from "svelte/store"
 import { checkUrl, copyTextToClipboard } from "../../js/helpers"
-import type { Author, Message } from "../../js/interfaces"
+import type { Asset, Author, Message } from "../../js/interfaces"
 import { contextMenuItems } from "../../js/stores/menuStore"
 import { linkHandler, setCurrentUser } from "../../js/stores/settingsStore.svelte"
-
+import { isOfflineMediaComplete, isOfflineMediaPending, requestOfflineMedia } from "../../js/stores/offlineMediaStore.svelte"
 
 export function onUserRightClick(e, author: Author) {
     contextMenuItems.set([
@@ -24,7 +24,23 @@ export function onUserRightClick(e, author: Author) {
 
 
 export function onMessageRightClick(e, message: Message) {
-    contextMenuItems.set([
+    const embedMedia = (message.embeds ?? []).flatMap(embed =>
+        [embed.thumbnail, embed.image, embed.video, ...(embed.images ?? [])]
+            .filter((asset): asset is Asset => Boolean(asset)));
+    const offlineMediaKeys = [...new Set(
+        [...(message.attachments ?? []), ...embedMedia]
+            .filter(attachment => attachment.mediaKey
+                && !attachment.isOffline
+                && !isOfflineMediaComplete(attachment.mediaKey))
+            .map(attachment => attachment.mediaKey as string))];
+    const offlineMediaPending = offlineMediaKeys.some(isOfflineMediaPending);
+    const offlineMediaItem = {
+        name: "Offline Media",
+        disabled: offlineMediaPending,
+        action: () => requestOfflineMedia(offlineMediaKeys)
+    };
+
+    const items = [
         {
             "name": `Open message in discord ${get(linkHandler) === 'app' ? "app" : "web"}`,
             "action": () => {
@@ -49,11 +65,15 @@ export function onMessageRightClick(e, message: Message) {
                 copyTextToClipboard(BigInt(message._id))
             }
         },
+        ...(offlineMediaKeys.length > 0
+            ? [offlineMediaItem]
+            : []),
         {
             "name": "Print message object to devtools (F12)",
             "action": () => {
                 console.log(JSON.stringify(message, null, 2))
             }
         }
-    ])
+    ]
+    contextMenuItems.set(items)
 }

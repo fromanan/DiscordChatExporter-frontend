@@ -15,24 +15,50 @@
     const viewUserState = getViewUserState()
 
     const guildState = getGuildState()
+    const fallbackAvatar = "/favicon.png"
+
+    function useFallbackAvatar(event: Event) {
+        const image = event.currentTarget as HTMLImageElement
+        if (!image.src.endsWith(fallbackAvatar)) {
+            image.src = fallbackAvatar
+        }
+    }
 
     /*
         NOTE - it is possible to reference another channer or guild (for example reposted annoucements channels)
     */
 
-    async function changeMessageId() {
+    async function jumpToReferencedMessage(event?: Event) {
+        event?.preventDefault()
+        event?.stopPropagation()
+
         if (!message.reference) {
             console.error("No message reference found")
             return
         }
 
-        // save current position
-        await guildState.comboSetGuildChannelMessage(message.guildId, message.channelId, message._id)
+        const referencedGuildId = message.reference.guildId ?? message.guildId
+        await guildState.comboSetGuildChannelMessage(
+            referencedGuildId,
+            message.reference.channelId,
+            message.reference.messageId
+        )
         await guildState.pushState()
+    }
 
-        // set new position
-        await guildState.comboSetGuildChannelMessage(message.reference.guildId, message.reference.channelId, message.reference.messageId)
-        await guildState.pushState()
+    function handleReferencedMessageKeydown(event: KeyboardEvent) {
+        if (event.key === "Enter" || event.key === " ") {
+            void jumpToReferencedMessage(event)
+        }
+    }
+
+    function hasReferencedMedia(referenced: Message): boolean {
+        return (referenced.attachments?.length ?? 0) > 0 ||
+            (referenced.embeds ?? []).some(embed =>
+                Boolean(embed.thumbnail) ||
+                Boolean(embed.video) ||
+                (embed.images?.length ?? 0) > 0
+            )
     }
 </script>
 
@@ -40,13 +66,35 @@
     <div class="referenced clickable">
         <div class="referenced-arrow" />
         {#if referencedMessage.author}
-            <img class="referenced-avatar" src={checkUrl(referencedMessage.author.avatar)} alt="avatar" on:click on:contextmenu|preventDefault={e=>onUserRightClick(e, referencedMessage.author)}  />
+            <img
+                class="referenced-avatar"
+                src={referencedMessage.author.avatar ? checkUrl(referencedMessage.author.avatar) : fallbackAvatar}
+                alt=""
+                on:error={useFallbackAvatar}
+                on:click
+                on:contextmenu|preventDefault={e=>onUserRightClick(e, referencedMessage.author)}
+            />
             <MessageAuthorName author={referencedMessage.author} on:click={() => viewUserState.setUser(referencedMessage.author)} />
-            <div class="referenced-content" on:click={changeMessageId}>
-                {#if referencedMessage.content[0].content !== ""}
-                    <MessageMarkdown content={referencedMessage.content[0].content.split("\n")[0]} emotes={referencedMessage?.emotes || []} mentions={referencedMessage?.mentions || []} roles={referencedMessage?.roles || []} channels={referencedMessage?.channels || []} />
-                {:else if referencedMessage.attachments && referencedMessage.attachments.length > 0}
-                    <i class="click-attachment"><span>Click to see attachment</span><Icon name="reply/attachment" width={20} /></i>
+            <div
+                class="referenced-content clickable"
+                role="link"
+                tabindex="0"
+                aria-label="Jump to referenced message"
+                title="Jump to referenced message"
+                on:click|capture={jumpToReferencedMessage}
+                on:keydown={handleReferencedMessageKeydown}
+            >
+                <span class="referenced-text">
+                    {#if referencedMessage.content[0].content !== ""}
+                        <MessageMarkdown content={referencedMessage.content[0].content.split("\n")[0]} emotes={referencedMessage?.emotes || []} mentions={referencedMessage?.mentions || []} roles={referencedMessage?.roles || []} channels={referencedMessage?.channels || []} />
+                    {:else if hasReferencedMedia(referencedMessage)}
+                        <i>Click to see attachment</i>
+                    {/if}
+                </span>
+                {#if hasReferencedMedia(referencedMessage)}
+                    <span class="referenced-media-icon" aria-label="Referenced message contains media">
+                        <Icon name="reply/attachment" width={20} />
+                    </span>
                 {/if}
             </div>
         {/if}
@@ -58,7 +106,15 @@
         <div class="referenced-avatar">
             <Icon name="reply/deleted" width={12} />
         </div>
-        <div class="referenced-content clickable" on:click={changeMessageId}>
+        <div
+            class="referenced-content clickable"
+            role="link"
+            tabindex="0"
+            aria-label="Jump to referenced message"
+            title="Jump to referenced message"
+            on:click|capture={jumpToReferencedMessage}
+            on:keydown={handleReferencedMessageKeydown}
+        >
             <i>This message was created in another server</i>
         </div>
     </div>
@@ -80,6 +136,8 @@
         display: flex;
         gap: 2px;
         align-items: center;
+        min-width: 0;
+        width: 100%;
     }
 
     .clickable {
@@ -108,24 +166,42 @@
     }
 
     .referenced-content {
+        display: flex;
+        flex: 1;
+        align-items: center;
+        gap: 5px;
+        min-width: 0;
+        max-width: min(100%, 300px);
         overflow: hidden;
-        text-overflow: ellipsis;
-        max-height: 19px;
+        max-height: 21px;
 
         margin-top: 1px;
         margin-left: 3px;
 
         color: #b5b6b8;
-        font-size: 0.875rem;
+        font-size: 0.9375rem;
         white-space: nowrap;
+    }
+
+    .referenced-text {
+        display: block;
+        min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
+        white-space: nowrap;
+    }
 
-        .click-attachment {
-            display:flex;
-            align-items:center;
-            gap: 5px;
-        }
+    .referenced-text :global(.message-markdown),
+    .referenced-text :global(.paragraph) {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .referenced-media-icon {
+        flex: none;
+        color: #dbdee1;
     }
     /* make emojis smaller, so they fit in the small referenced message space */
     .referenced-content :global(.message-emoji),

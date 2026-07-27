@@ -65,7 +65,7 @@
         searchState.setSearchPrompt(event.currentTarget.value)
     }
 
-    function focusInput() {
+    export function focusInput() {
         if (domInput) {
             focused = true;
             domInput.focus();
@@ -127,11 +127,11 @@
     />
     {#if searchPrompt === ''}
         <div class="icon">
-            <Icon name="other/magnifying-glass" width={16} />
+            <Icon name="other/magnifying-glass" width={14} />
         </div>
     {:else}
         <button class="icon" onclick={()=>searchState.setSearchPrompt("")}>
-            <Icon name="modal/x" width={16} />
+            <Icon name="modal/x" width={14} />
         </button>
     {/if}
     <div class="autocomplete">
@@ -146,16 +146,16 @@
 
         input {
             box-sizing: border-box;
-            width: 140px;
+            width: 172px;
             background-color: #202225;
             color: #dbdee1;
             height: 25px;
             border: 0px;
             border-radius: 3px;
             padding: 0px 30px 0 10px;
-            margin-right: 10px;
+            margin-right: 0;
             outline: none;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 500;
         }
         input::placeholder {

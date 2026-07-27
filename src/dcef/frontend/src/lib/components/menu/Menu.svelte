@@ -39,7 +39,7 @@
 		display: grid;
 		border: 1px solid #0003;
 		box-shadow: 2px 2px 5px 0px #0002;
-		background: #18191C;
+		background: #2B2D31;
 		z-index: 99999;
 	}
 </style>

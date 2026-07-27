@@ -1,9 +1,10 @@
 <script>
-    import { nameRenderer, startingDayOfTheWeek, developerMode, online, gifs, linkHandler, channelScrollPosition, hideSpoilers, font, timestampFormat, dateFormat, timeFormat, locale} from '../../js/stores/settingsStore.svelte';
+    import { nameRenderer, startingDayOfTheWeek, developerMode, online, gifs, linkHandler, channelScrollPosition, hideSpoilers, font, showCloudMediaIndicator, showJumpToPresent, timestampFormat, dateFormat, timeFormat, locale} from '../../js/stores/settingsStore.svelte';
     import { dateFormats, timeFormats, formatMoment, browserLocales } from '../../js/time';
     import RadioButton from './RadioButton.svelte';
     import RadioGroup from './RadioGroup.svelte';
     import MenuOpenOverlay from './MenuOpenOverlay.svelte';
+    import ToggleSetting from './ToggleSetting.svelte';
     import { getLayoutState } from '../../js/stores/layoutState.svelte';
     import Icon from '../icons/Icon.svelte';
     let testDate = '2020-01-16T11:04:47.215+00:00';
@@ -34,6 +35,7 @@
         <div class="tab" class:selected={selectedTab == "appearance"} on:click={() => selectTab("appearance")}>Appearance</div>
         <div class="tab" class:selected={selectedTab == "privacy"} on:click={() => selectTab("privacy")}>Privacy & Safety</div>
         <div class="tab" class:selected={selectedTab == "accessibility"} on:click={() => selectTab("accessibility")}>Accessibility</div>
+        <div class="tab" class:selected={selectedTab == "behavior"} on:click={() => selectTab("behavior")}>Behavior</div>
 
         <hr>
 
@@ -286,6 +288,30 @@
                 </RadioGroup>
             {/if}
 
+            {#if selectedTab == "behavior"}
+                <div class="title-wrapper">
+                    <div class="hamburger-btn" on:click={layoutState.toggleSettingsSideMenu}>
+                        <Icon name="other/hamburger" width={37*.5} height={32*.5} />
+                    </div>
+                    <div class="title">Behavior</div>
+                </div>
+
+                <RadioGroup title={"Media"}>
+                    <ToggleSetting
+                        title={"Show Offline Status Indicator"}
+                        bind:checked={$showCloudMediaIndicator}
+                    />
+                </RadioGroup>
+
+                <hr>
+
+                <RadioGroup title={"Feed"}>
+                    <ToggleSetting
+                        title={"Show Jump to Present"}
+                        bind:checked={$showJumpToPresent}
+                    />
+                </RadioGroup>
+            {/if}
 
             {#if selectedTab == "advanced"}
                 <div class="title-wrapper">
@@ -429,12 +455,14 @@
 
     .settings-scroller {
         position: relative;
+        box-sizing: border-box;
         padding-top: 30px;
+        padding-bottom: 40px;
         background-color: #313338;
         padding-left: 35px;
         padding-right: 35px;
         width: 100%;
-        max-height: 100vh;
+        max-height: 100dvh;
 
         overflow-y: auto;
     }

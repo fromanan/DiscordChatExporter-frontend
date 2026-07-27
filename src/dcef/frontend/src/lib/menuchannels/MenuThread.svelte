@@ -127,10 +127,10 @@
         -webkit-line-clamp: 1;
         -webkit-box-orient: vertical;
         color: #949BA4;
-        line-height: 20px;
+        line-height: 18px;
         font-weight: 500;
-        font-size: 16px;
-        height: 20px;
+        font-size: 14px;
+        height: 18px;
         overflow: hidden;
     }
     .selected .thread-name {

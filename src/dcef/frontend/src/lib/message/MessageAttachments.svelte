@@ -6,11 +6,13 @@
     import MessageTiledImages from "./MessageTiledImages.svelte";
     import Icon from "../icons/Icon.svelte";
     import MessageVideo from "./MessageVideo.svelte";
+    import MediaArchiveIndicator from "./MediaArchiveIndicator.svelte";
 
 	interface MyProps {
         attachments: Asset[];
+        onmediastatus?: (asset: Asset, status: "loaded" | "failed") => void;
     }
-    let { attachments}: MyProps = $props();
+    let { attachments, onmediastatus = undefined}: MyProps = $props();
 
 	let imageAttachments = $derived(attachments.filter(a => a.type === 'image' || (a.type === 'unknown' && !a.filenameWithoutHash.includes('.'))));
 	let otherAttachments = $derived(attachments.filter(a => a.type !== 'image' && (a.type !== 'unknown' || a.filenameWithoutHash.includes('.'))));
@@ -21,7 +23,7 @@
 
 {#if imageAttachments.length > 0}
 	<div class="image-attachments-wrapper">
-		<MessageTiledImages images={imageAttachments} isAttachment={true}/>
+		<MessageTiledImages images={imageAttachments} isAttachment={true} {onmediastatus}/>
 	</div>
 {/if}
 
@@ -30,11 +32,12 @@
 	{#each otherAttachments as attachment}
 		{@const attachmentExtension: string = attachment?.filenameWithoutHash.toLowerCase().split('.').pop() ?? 'invalid-fileextension'}
 		{#if attachment.type == 'video'}
-			<MessageVideo attachment={attachment} />
+			<MessageVideo {attachment} {onmediastatus} />
 		{:else if ['txt'].includes(attachmentExtension)}
 			<MessageAttachmentTxt attachment={attachment} />
 		{:else}
 			<div class="attachment-wrapper">
+				<MediaArchiveIndicator asset={attachment} />
 				<div class="attachment" style="width: 100%;">
 					{#if ['pdf'].includes(attachmentExtension)}
 						<Icon name="filetype/pdf" width={24} height={32} />

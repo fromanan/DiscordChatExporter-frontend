@@ -1,4 +1,78 @@
-import type { Category, Channel } from "../interfaces";
+import type { Author, Category, Channel } from "../interfaces";
+
+const ARCHIVE_API_BASE_URL = import.meta.env.VITE_ARCHIVE_API_BASE_URL ?? "http://127.0.0.1:5178/api/v1";
+
+export type OfflineMediaArchiveResult = "succeeded" | "persisted-view-update-deferred" | "pending" | "failed";
+
+export function getOfflineMediaUrl(mediaKey: string, fileName?: string): string {
+    const encodedKey = encodeURIComponent(mediaKey);
+    return fileName
+        ? `${ARCHIVE_API_BASE_URL}/media/${encodedKey}/${encodeURIComponent(fileName)}`
+        : `${ARCHIVE_API_BASE_URL}/media/${encodedKey}`;
+}
+
+export async function hasOfflineMedia(mediaKey: string): Promise<boolean> {
+    try {
+        const response = await fetch(getOfflineMediaUrl(mediaKey), {
+            headers: { Range: "bytes=0-0" },
+            cache: "no-store"
+        });
+        return response.ok;
+    }
+    catch {
+        return false;
+    }
+}
+
+export async function archiveOfflineMedia(mediaKey: string): Promise<OfflineMediaArchiveResult> {
+    try {
+        const response = await fetch(
+            `${ARCHIVE_API_BASE_URL}/media/${encodeURIComponent(mediaKey)}/offline`,
+            { method: "POST" });
+        const payload = await response.json();
+        if (payload.status === "succeeded"
+            || payload.status === "persisted-view-update-deferred"
+            || payload.status === "pending") {
+            return payload.status;
+        }
+        console.error("api - Failed to archive offline media", payload.error ?? payload);
+        return "failed";
+    }
+    catch (error) {
+        console.error("api - Failed to queue offline media", error);
+        return "failed";
+    }
+}
+
+export async function fetchArchiveRevision(): Promise<number | null> {
+    try {
+        const response = await fetch('/api/status', { cache: 'no-store' })
+        if (!response.ok) {
+            return null
+        }
+        const status = await response.json()
+        return typeof status.archiveRevision === "number" ? status.archiveRevision : null
+    }
+    catch (e) {
+        console.error("api - Failed to fetch archive revision", e)
+        return null
+    }
+}
+
+export async function fetchUserProfile(guildId: string, userId: string): Promise<Author | null> {
+    try {
+        const response = await fetch(
+            `/api/guild/user?guild_id=${encodeURIComponent(guildId)}&user_id=${encodeURIComponent(userId)}`)
+        if (!response.ok) {
+            return null
+        }
+        return await response.json()
+    }
+    catch (e) {
+        console.error("api - Failed to fetch user profile", e)
+        return null
+    }
+}
 
 export async function fetchMessages(guildId: string | null, channelId: string, direction: "before" | "after" | "around" | "first" | "last", messageId: string | null = null, limit: number = 50) {
     if (channelId === null) {

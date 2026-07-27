@@ -3,36 +3,107 @@
     import { getViewUserState } from './viewUserState.svelte';
 
     const viewUserState = getViewUserState()
+
+    function positionProfile(node: HTMLElement) {
+        let frame = 0
+
+        function updatePosition() {
+            const anchor = viewUserState.anchorRect
+            if (!anchor) {
+                return
+            }
+
+            const boundary = viewUserState.boundaryRect ?? {
+                top: 0,
+                right: window.innerWidth,
+                bottom: window.innerHeight,
+                left: 0,
+                width: window.innerWidth,
+                height: window.innerHeight,
+            }
+            const card = node.getBoundingClientRect()
+            const gap = 10
+            const padding = 12
+            const anchorIsInLowerHalf =
+                anchor.top + anchor.height / 2 >= boundary.top + boundary.height / 2
+
+            // Keep the card completely to the left of the clicked mention.
+            // It may cross the feed's left edge into the channel area; only
+            // the browser viewport is a horizontal safety boundary.
+            const idealLeft = anchor.left - gap - card.width
+            const left = Math.max(
+                padding,
+                Math.min(idealLeft, window.innerWidth - card.width - padding),
+            )
+
+            // Upper-half mentions align the card's top edge and grow down.
+            // Lower-half mentions align the card's bottom edge and grow up.
+            const idealTop = anchorIsInLowerHalf
+                ? anchor.bottom - card.height
+                : anchor.top
+            const top = Math.max(
+                boundary.top + padding,
+                Math.min(idealTop, boundary.bottom - card.height - padding),
+            )
+
+            node.style.left = `${left}px`
+            node.style.top = `${top}px`
+            node.style.transformOrigin = anchorIsInLowerHalf ? "right bottom" : "right top"
+            node.dataset.placement = anchorIsInLowerHalf ? "above-left" : "below-left"
+        }
+
+        frame = requestAnimationFrame(updatePosition)
+        window.addEventListener("resize", updatePosition)
+
+        return {
+            destroy() {
+                cancelAnimationFrame(frame)
+                window.removeEventListener("resize", updatePosition)
+            },
+        }
+    }
 </script>
 
 
 
 {#if viewUserState.shown}
-    <div class="gallery-wrapper" on:click={()=>viewUserState.setUser(null)}>
-        <div class="gallery-closebtn" on:click={()=>viewUserState.setUser(null)}>&times;</div>
-        <div id="profile" on:click|stopPropagation>
-            <Image asset={viewUserState.user?.avatar} class="profile-avatar" />
+    <div class="profile-dismiss-layer" class:anchored={viewUserState.anchorRect !== null} on:click={()=>viewUserState.setUser(null)}>
+        <div id="profile" class:anchored={viewUserState.anchorRect !== null} use:positionProfile on:click|stopPropagation>
+            {#if viewUserState.user?.avatar}
+                <Image asset={viewUserState.user.avatar} class="profile-avatar" clickable={false} alt="" />
+            {:else}
+                <div class="profile-avatar profile-avatar-fallback" aria-hidden="true">
+                    {viewUserState.user?.nickname?.slice(0, 1)?.toUpperCase() ?? "?"}
+                </div>
+            {/if}
             <div class="profile-background"></div>
 
             <div class="profile-inner">
                 <div class="profile-header">
                     <div class="profile-nickname">{viewUserState.user.nickname}</div>
-                    <div class="profile-name">{viewUserState.user.name}</div>
+                    <div class="profile-name">
+                        @{viewUserState.user.name}{viewUserState.user.discriminator && viewUserState.user.discriminator !== "0" ? `#${viewUserState.user.discriminator}` : ""}
+                        {#if viewUserState.user.isBot}<span class="bot-tag">BOT</span>{/if}
+                    </div>
                 </div>
                 <div class="profile-scroll">
-                    <div class="mini-title">ROLES</div>
-                    <div class="roles-wrapper">
-                        {#if viewUserState.user.roles}
+                    {#if viewUserState.user.msgCount !== undefined}
+                        <div class="mini-title">ARCHIVE</div>
+                        <div class="archive-stat">{viewUserState.user.msgCount.toLocaleString()} archived messages</div>
+                    {/if}
+                    {#if viewUserState.user.roles?.length}
+                        <div class="mini-title">ROLES</div>
+                        <div class="roles-wrapper">
                             {#each viewUserState.user.roles as role}
                                 <div class="role">
                                     <div class="role-color" style={`background-color: ${role.color ?? "#c4c9ce"};`}></div>
                                     <div class="role-name">{role.name}</div>
                                 </div>
                             {/each}
-                        {:else}
-                            <div class="profile-error">Roles not exported</div>
-                        {/if}
-                    </div>
+                        </div>
+                    {/if}
+                    <div class="mini-title">USER ID</div>
+                    <div class="profile-id">{viewUserState.user._id.replace(/^0+/, "")}</div>
                 </div>
             </div>
         </div>
@@ -40,7 +111,7 @@
 {/if}
 
 <style>
-    .gallery-wrapper {
+    .profile-dismiss-layer {
         position: fixed;
         top: 0;
         left: 0;
@@ -56,24 +127,17 @@
         flex-direction: column;
 
         text-align: left;
-    }
-
-    .gallery-closebtn {
-        position: absolute;
-        top: -15px;
-        right: 0;
-        padding: 10px;
-        color: white;
-        cursor: pointer;
-
-        font-size: 3rem;
-        font-weight: 600;
+        &.anchored {
+            background-color: transparent;
+            display: block;
+        }
     }
 
     #profile {
         width: 100%;
         max-width: 340px;
-        height: 548px;
+        height: auto;
+        min-height: 300px;
         max-height: 95svh;
         border-radius: 8px;
 
@@ -83,7 +147,11 @@
         position: relative;
         display: flex;
         flex-direction: column;
-
+        box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+        overflow: hidden;
+        &.anchored {
+            position: fixed;
+        }
     }
 
     .profile-background {
@@ -107,6 +175,15 @@
         border: 7px solid #232428;
         cursor: pointer;
     }
+    .profile-avatar-fallback {
+        box-sizing: border-box;
+        display: grid;
+        place-items: center;
+        background: #5865f2;
+        font-size: 32px;
+        font-weight: 700;
+        cursor: default;
+    }
 
     .profile-inner {
         background-color: #111214;
@@ -116,8 +193,7 @@
 
         display: flex;
         flex-direction: column;
-        height: inherit;
-        height: calc(100% - 130px);
+        min-height: 150px;
     }
 
     .profile-header {
@@ -141,10 +217,25 @@
     }
 
     .profile-name,
-    .profile-error {
+    .profile-id,
+    .archive-stat {
         word-break: break-all;
         font-size: 14px;
         line-height: 18px
+    }
+    .bot-tag {
+        margin-left: 6px;
+        padding: 1px 4px;
+        border-radius: 3px;
+        background: #5865f2;
+        color: white;
+        font-size: 10px;
+        font-weight: 600;
+    }
+    .archive-stat,
+    .profile-id {
+        color: #b5bac1;
+        margin-bottom: 14px;
     }
 
     .mini-title {

@@ -95,13 +95,17 @@ const oldMention = {
         return new RegExp(`^@(${searchTerms.join("|")})`, 'i').exec(source);
     },
     parse: function(capture, recurseParse, state) {
+        const mention = state.mentions.find(
+            mention => mention.nickname?.toLowerCase() === capture[1].toLowerCase())
         return {
             type: 'mention',
-            username: capture[1]
+            username: capture[1],
+            userId: mention?._id
         };
     },
     html: function(node, recurseOutput, state) {
-        return `<span class="message-mention" href="${node.username}">@${node.username}</span>`;
+        const userIdAttribute = node.userId ? ` data-userid="${node.userId}"` : ""
+        return `<button type="button" class="message-mention message-user-mention"${userIdAttribute}>@${node.username}</button>`;
     },
 }
 
@@ -130,9 +134,9 @@ const newMention = {
     },
     html: function(node, recurseOutput, state) {
         if (node.nickName == null) {
-            return `<span class="message-mention" data-userid="${node.userId}">&lt;@${node.userId}&gt;</span>`;
+            return `<button type="button" class="message-mention message-user-mention" data-userid="${node.userId}">&lt;@${node.userId}&gt;</button>`;
         }
-        return `<span class="message-mention" data-userid="${node.userId}">@${node.nickName}</span>`;
+        return `<button type="button" class="message-mention message-user-mention" data-userid="${node.userId}">@${node.nickName}</button>`;
     }
 }
 
@@ -385,8 +389,9 @@ const newEmoji = {
     const paddedEmojiId = emojiId.toString().padStart(24, '0')
     let url = null
     if (!state.onlyOffline) {
-        // fallback online url if offline mode is not enforced
-        url = `https://cdn.discordapp.com/emojis/${capture[3]}`
+        // The CDN path is an image only when its format is explicit.  The
+        // extension-less endpoint returns a 404 for custom emoji.
+        url = `https://cdn.discordapp.com/emojis/${emojiId}.${isAnimated ? "gif" : "png"}?size=96&quality=lossless`
     }
     for (const emote of state.emotes) {
         if (emote._id == paddedEmojiId) {

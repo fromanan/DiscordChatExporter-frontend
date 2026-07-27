@@ -7,6 +7,7 @@ from itertools import zip_longest
 import os
 import ijson
 from pprint import pprint
+from urllib.parse import urlsplit
 
 from pymongo import ReplaceOne, UpdateOne
 
@@ -30,6 +31,30 @@ class JsonProcessor:
 		self.asset_processor = asset_processor
 		self.index = index
 		self.total = total
+
+	@staticmethod
+	def restore_archive_media_metadata(source_asset: dict, processed_asset: dict, message_id: str, media_kind: str):
+		if "mediaKey" in source_asset:
+			processed_asset["mediaKey"] = source_asset["mediaKey"]
+		if "isOffline" in source_asset:
+			processed_asset["isOffline"] = source_asset["isOffline"]
+
+		if "mediaKey" in processed_asset:
+			return
+
+		source_url = source_asset.get("canonicalUrl") or source_asset.get("url")
+		if not source_url:
+			return
+
+		parsed = urlsplit(source_url)
+		if parsed.hostname not in ("media.discordapp.net", "cdn.discordapp.com"):
+			return
+
+		normalized_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+		unpadded_message_id = message_id.lstrip("0") or "0"
+		hash_input = f"{unpadded_message_id}|{media_kind}|{normalized_url}"
+		processed_asset["mediaKey"] = f"url:{hashlib.sha256(hash_input.encode('utf-8')).hexdigest()}"
+		processed_asset["isOffline"] = False
 
 	def process_guild(self, guild):
 		guild["_id"] = Formatters.pad_id(guild.pop("id"))
@@ -113,26 +138,32 @@ class JsonProcessor:
 			if "embeds" in message:
 				for embed in message["embeds"]:
 					if "thumbnail" in embed:
-						if "width" in embed["thumbnail"] and "height" in embed["thumbnail"]:
-							original_width = embed["thumbnail"]["width"]
-							original_height = embed["thumbnail"]["height"]
-						embed["thumbnail"] = self.asset_processor.process(embed["thumbnail"]["url"], is_searchable=False)
+						source_thumbnail = embed["thumbnail"]
+						original_width = source_thumbnail.get("width")
+						original_height = source_thumbnail.get("height")
+						embed["thumbnail"] = copy.deepcopy(
+							self.asset_processor.process(source_thumbnail["url"], is_searchable=False))
+						self.restore_archive_media_metadata(
+							source_thumbnail, embed["thumbnail"], message["_id"], "embed-thumbnail")
 
 						# restore some fields, because we are losing them in the asset preprocess if url is remote
-						if "original_width" in locals():
+						if original_width is not None and original_height is not None:
 							embed["thumbnail"]["width"] = original_width
 							embed["thumbnail"]["height"] = original_height
 
 					if "video" in embed:
-						if "width" in embed["video"] and "height" in embed["video"]:
-							original_width2 = embed["video"]["width"]
-							original_height2 = embed["video"]["height"]
-						embed["video"] = self.asset_processor.process(embed["video"]["url"], is_searchable=False)
+						source_video = embed["video"]
+						original_width = source_video.get("width")
+						original_height = source_video.get("height")
+						embed["video"] = copy.deepcopy(
+							self.asset_processor.process(source_video["url"], is_searchable=False))
+						self.restore_archive_media_metadata(
+							source_video, embed["video"], message["_id"], "embed-video")
 
 						# restore some fields, because we are losing them in the asset preprocess if url is remote
-						if "original_width2" in locals():
-							embed["video"]["width"] = original_width2
-							embed["video"]["height"] = original_height2
+						if original_width is not None and original_height is not None:
+							embed["video"]["width"] = original_width
+							embed["video"]["height"] = original_height
 
 					# embed.image field is redundant - merge with embed.images field and remove duplicate images
 					# note - this field is not always duplicated with the first item in embed.images field - discordless uses only image field without creating embed.images field
@@ -154,14 +185,16 @@ class JsonProcessor:
 
 						# process images
 						new_images = []
-						for image in embed["images"]:
-							if "width" in image and "height" in image:
-								original_width = image["width"]
-								original_height = image["height"]
-							image = self.asset_processor.process(image["url"], is_searchable=False)  # does this work?
+						for source_image in embed["images"]:
+							original_width = source_image.get("width")
+							original_height = source_image.get("height")
+							image = copy.deepcopy(
+								self.asset_processor.process(source_image["url"], is_searchable=False))  # does this work?
+							self.restore_archive_media_metadata(
+								source_image, image, message["_id"], "embed-image")
 
 							# restore some fields, because we are losing them in the asset preprocess if url is remote
-							if "originalWidth" in locals():
+							if original_width is not None and original_height is not None:
 								image["width"] = original_width
 								image["height"] = original_height
 
@@ -174,6 +207,18 @@ class JsonProcessor:
 
 					if "author" in embed and "iconUrl" in embed["author"]:
 						embed["author"]["icon"] = self.asset_processor.process(embed["author"].pop("iconUrl"), is_searchable=False)
+
+			if "invites" in message:
+				for invite in message["invites"]:
+					if invite.get("iconUrl"):
+						invite["icon"] = self.asset_processor.process(invite.pop("iconUrl"), is_searchable=False)
+					else:
+						invite.pop("iconUrl", None)
+
+					if invite.get("bannerUrl"):
+						invite["banner"] = self.asset_processor.process(invite.pop("bannerUrl"), is_searchable=False)
+					else:
+						invite.pop("bannerUrl", None)
 
 			if "reactions" in message:
 				for reaction in message["reactions"]:
@@ -196,6 +241,8 @@ class JsonProcessor:
 			new_attachments = []
 			if "attachments" in message:
 				for attachment in message["attachments"]:
+					original_width = attachment.get("width")
+					original_height = attachment.get("height")
 					new_attachment = self.asset_processor.process(attachment.pop("url"), is_searchable=True)
 
 					# restore some fields, because we are losing them in the asset preprocess if url is remote
@@ -203,7 +250,17 @@ class JsonProcessor:
 						new_attachment["sizeBytes"] = attachment["fileSizeBytes"]
 
 					if "id" in attachment:
-						new_attachment["id"] = attachment["_id"]
+						new_attachment["id"] = attachment["id"]
+
+					if "mediaKey" in attachment:
+						new_attachment["mediaKey"] = attachment["mediaKey"]
+
+					if "isOffline" in attachment:
+						new_attachment["isOffline"] = attachment["isOffline"]
+
+					if original_width is not None and original_height is not None:
+						new_attachment["width"] = original_width
+						new_attachment["height"] = original_height
 
 					new_attachments.append(new_attachment)
 
@@ -413,17 +470,23 @@ class JsonProcessor:
 		# get date modified
 		date_modified = os.path.getmtime(json_path_with_base_dir)
 
-		self.collections["jsons"].insert_one({
-			"_id": json_path,
-			"size": file_size,
-			"date_modified": date_modified
-		})
+		self.collections["jsons"].replace_one(
+			{"_id": json_path},
+			{
+				"_id": json_path,
+				"size": file_size,
+				"date_modified": date_modified
+			},
+			upsert=True
+		)
 
 	def merge_message(self, message_to_keep: dict, message_to_discard: dict) -> dict:
 		"""
 		merges two messages
 		"""
-		message_to_keep['sources'] = message_to_keep['sources'] + message_to_discard['sources']
+		message_to_keep['sources'] = list(dict.fromkeys(
+			message_to_keep['sources'] + message_to_discard['sources']
+		))
 		return message_to_keep
 
 	def merge_messages(self, messages_list1: list, messages_list2: list) -> list:

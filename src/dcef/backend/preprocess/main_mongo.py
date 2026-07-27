@@ -1,6 +1,7 @@
 import os
 import sys
 import functools
+import time
 
 from FileFinder import FileFinder
 from MongoDatabase import MongoDatabase
@@ -74,17 +75,44 @@ def wipe_database(database: MongoDatabase):
 	version["value"] = EXPECTED_VERSION
 	config.update_one({"key": "version"}, {"$set": version})
 
-def remove_processed_jsons(database, jsons):
+def remove_processed_jsons(database, file_finder, jsons):
 	"""
-	removes jsons from the list that are already processed
+	Removes unchanged JSONs from the list. Files at an existing path are
+	eligible again when their size or modification timestamp changes.
 	"""
 	database_jsons = database.get_collection("jsons").find()
 	for database_json in database_jsons:
 		json_path = database_json["_id"]
-		if json_path in jsons:
+		if json_path not in jsons:
+			continue
+
+		absolute_path = file_finder.add_base_directory(json_path)
+		try:
+			unchanged = (
+				database_json.get("size") == os.path.getsize(absolute_path)
+				and database_json.get("date_modified") == os.path.getmtime(absolute_path)
+			)
+		except FileNotFoundError:
+			unchanged = False
+
+		if unchanged:
 			jsons.remove(json_path)
 
 	return jsons
+
+
+def bump_archive_revision(database):
+	"""
+	Notifies the API/UI only after a complete preprocessing pass.
+	"""
+	database.get_collection("config").update_one(
+		{"key": "archive_revision"},
+		{
+			"$inc": {"value": 1},
+			"$set": {"updated_at": time.time()}
+		},
+		upsert=True
+	)
 
 
 def main(input_dir):
@@ -97,7 +125,7 @@ def main(input_dir):
 
 	jsons = file_finder.find_channel_exports()
 	jsons_count_before = len(jsons)
-	jsons = remove_processed_jsons(database, jsons)
+	jsons = remove_processed_jsons(database, file_finder, jsons)
 	jsons_count = len(jsons)
 	jsons_size = 0
 	invalid_jsons = []
@@ -130,24 +158,45 @@ def main(input_dir):
 			eta.increment(size)
 
 	print("preprocess done")
+	if jsons_count > 0:
+		bump_archive_revision(database)
+	return jsons_count
 
 
 def print_help():
-	print("Usage: python main.py <docker|windows>")
+	print("Usage: python main_mongo.py <docker|windows> [--watch]")
+
+
+def get_input_dir(platform):
+	configured_input_dir = os.environ.get("DCEF_EXPORTS_DIR")
+	if configured_input_dir:
+		return os.path.realpath(configured_input_dir) + os.sep
+	if platform == "windows":
+		return "../../../exports/"
+	if platform == "docker":
+		return "/dcef/exports/"
+	return None
 
 if __name__ == "__main__":
-	if len(sys.argv) != 2:
+	if len(sys.argv) not in (2, 3):
 		print_help()
 		sys.exit(1)
 
-	if sys.argv[1] == "windows":
-		input_dir = "../../../exports/"
-	elif sys.argv[1] == "docker":
-		input_dir = "/dcef/exports/"
-	else:
+	input_dir = get_input_dir(sys.argv[1])
+	if input_dir is None or (len(sys.argv) == 3 and sys.argv[2] != "--watch"):
 		print_help()
 		sys.exit(1)
 
-	with Timer("Preprocess"):
-		main(input_dir)
+	watch = (
+		len(sys.argv) == 3
+		or os.environ.get("DCEF_PREPROCESS_WATCH", "").lower() in ("1", "true", "yes")
+	)
+	interval_seconds = max(1, int(os.environ.get("DCEF_WATCH_INTERVAL_SECONDS", "5")))
+
+	while True:
+		with Timer("Preprocess"):
+			main(input_dir)
+		if not watch:
+			break
+		time.sleep(interval_seconds)
 

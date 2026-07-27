@@ -7,6 +7,9 @@
 	}
 
 	function onClick(item) {
+		if (item.disabled) {
+			return
+		}
 		closeMenu()
 		item.action()
 	}
@@ -16,7 +19,7 @@
 	{#if $contextMenuItems.length > 0}
 		<Menu on:click={closeMenu} on:clickoutside={closeMenu}>
 			{#each $contextMenuItems as item}
-				<div on:click={()=>onClick(item)} class="menu-option">
+				<div on:click={()=>onClick(item)} class="menu-option" class:disabled={item.disabled}>
 					{item.name}
 				</div>
 			{/each}
@@ -33,16 +36,17 @@
 		display: flex;
 		align-items: center;
 		grid-gap: 5px;
-        color: #787A7E   ;
+        color: #DBDEE1;
 	}
 	div:hover {
 		background: #4752C4;
-        color: white;
+        color: #DBDEE1;
 	}
-	/* div.disabled {
-		color: #0006;
+	div.disabled {
+		cursor: default;
+		color: rgba(219, 222, 225, 0.4);
 	}
 	div.disabled:hover {
-		background: white;
-	} */
+		background: transparent;
+	}
 </style>

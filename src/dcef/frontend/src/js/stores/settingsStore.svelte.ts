@@ -31,6 +31,8 @@ export const linkHandler = writable("app");
 export const channelScrollPosition = writable("bottom");
 export const hideSpoilers = writable(true);
 export const font = writable("ggsans");
+export const showCloudMediaIndicator = writable(true);
+export const showJumpToPresent = writable(true);
 
 function withLocalStorage(store, localstorageKey: string, type = "string") {
     const restoredValue = localStorage.getItem(localstorageKey);
@@ -65,6 +67,8 @@ withLocalStorage(linkHandler, "linkHandler", "string");
 withLocalStorage(channelScrollPosition, "channelScrollPosition", "string");
 withLocalStorage(hideSpoilers, "hideSpoilers", "bool");
 withLocalStorage(font, "font", "string");
+withLocalStorage(showCloudMediaIndicator, "showCloudMediaIndicator", "bool");
+withLocalStorage(showJumpToPresent, "showJumpToPresent", "bool");
 withLocalStorage(currentUserId, "currentUserId", "string");
 withLocalStorage(currentUserName1, "currentUserName1", "string");
 withLocalStorage(currentUserName2, "currentUserName2", "string");

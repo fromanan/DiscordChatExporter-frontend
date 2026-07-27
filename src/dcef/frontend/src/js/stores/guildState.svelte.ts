@@ -11,10 +11,14 @@ let channelId: string | null = $state(null);
 let categories = $state([]);
 let channel = $derived(categories.flatMap(c => c.channels).find(c => c._id === channelId) || null);
 let channelMessageId = $state(null);
+let channelViewportMessageId: string | null = null;
+let channelMessageOffset: number | null = null;
 
 let threadId: string | null  = $state(null);
 let thread = $derived(categories.flatMap(c => c.channels).flatMap(c => c.threads).find(t => t._id === threadId) || null);
 let threadMessageId: string | null  = $state(null);
+let threadViewportMessageId: string | null = null;
+let threadMessageOffset: number | null = null;
 
 // fast lookups:
 // key is channelId, value is channel object
@@ -76,20 +80,32 @@ export function getGuildState() {
 			guild: guildId || null,
 			channel: channelId || null,
 			thread: threadId || null,
-			channelmessage: channelMessageId || null,
-			threadmessage: threadMessageId || null,
+			channelmessage: channelViewportMessageId || channelMessageId || null,
+			channeloffset: channelMessageOffset,
+			threadmessage: threadViewportMessageId || threadMessageId || null,
+			threadoffset: threadMessageOffset,
 			search: searchState.submittedSearchPrompt || null
 		}
 	}
 
 	function getUrlState() {
 		const urlParams = new URLSearchParams(window.location.search)
+		const parseOffset = (name: string) => {
+			const value = urlParams.get(name)
+			if (value === null) {
+				return null
+			}
+			const parsed = Number(value)
+			return Number.isFinite(parsed) ? parsed : null
+		}
 		let state = {
 			guild: urlParams.get("guild") || null,
 			channel: urlParams.get("channel") || null,
 			thread: urlParams.get("thread") || null,
 			channelmessage: urlParams.get("channelmessage") || null,
+			channeloffset: parseOffset("channeloffset"),
 			threadmessage: urlParams.get("threadmessage") || null,
+			threadoffset: parseOffset("threadoffset"),
 			search: urlParams.get("search") || null
 		}
 
@@ -161,7 +177,9 @@ export function getGuildState() {
 		console.log("router - changed guildId", guildId);
 	}
 
-	async function changeChannelId(newChannelId: string | null, newChannelMessageId: string | null) {
+	async function changeChannelId(newChannelId: string | null, newChannelMessageId: string | null, newChannelMessageOffset: number | null = null) {
+		channelViewportMessageId = newChannelId ? newChannelMessageId : null
+		channelMessageOffset = newChannelId ? newChannelMessageOffset : null
 		if (channelId === newChannelId && channelMessageId === newChannelMessageId) {
 			return;
 		}
@@ -183,7 +201,9 @@ export function getGuildState() {
 	}
 
 
-	async function changeThreadId(newThreadId: string | null, newThreadMessageId: string | null) {
+	async function changeThreadId(newThreadId: string | null, newThreadMessageId: string | null, newThreadMessageOffset: number | null = null) {
+		threadViewportMessageId = newThreadId ? newThreadMessageId : null
+		threadMessageOffset = newThreadId ? newThreadMessageOffset : null
 		if (threadId === newThreadId && threadMessageId === newThreadMessageId) {
 			return;
 		}
@@ -205,6 +225,30 @@ export function getGuildState() {
 			layoutState.hideThread()
 		}
 		console.log("router - changed threadId", threadId);
+	}
+
+	async function replaceViewportState(target: "channel" | "thread", messageId: string, offset: number) {
+		if (target === "channel") {
+			if (!channelId) {
+				return
+			}
+			if (channelViewportMessageId === messageId && channelMessageOffset === offset) {
+				return
+			}
+			channelViewportMessageId = messageId
+			channelMessageOffset = offset
+		}
+		else {
+			if (!threadId) {
+				return
+			}
+			if (threadViewportMessageId === messageId && threadMessageOffset === offset) {
+				return
+			}
+			threadViewportMessageId = messageId
+			threadMessageOffset = offset
+		}
+		await replaceState()
 	}
 
 
@@ -270,8 +314,14 @@ export function getGuildState() {
 		get channelMessageId() {
 			return channelMessageId;
 		},
+		get channelMessageOffset() {
+			return channelMessageOffset;
+		},
 		get threadMessageId() {
 			return threadMessageId;
+		},
+		get threadMessageOffset() {
+			return threadMessageOffset;
 		},
 		changeGuildId,
 		changeChannelId,
@@ -281,6 +331,7 @@ export function getGuildState() {
 		getUrlState,
 		pushState,
 		replaceState,
+		replaceViewportState,
 	};
 }
 
@@ -303,8 +354,8 @@ export function channelOrThreadIdToName(channelId: string) {
 
 async function restoreGuildState(state) {
 	await guildState.changeGuildId(state.guild);
-	await guildState.changeChannelId(state.channel, state.channelmessage);
-	await guildState.changeThreadId(state.thread, state.threadmessage);
+	await guildState.changeChannelId(state.channel, state.channelmessage, state.channeloffset);
+	await guildState.changeThreadId(state.thread, state.threadmessage, state.threadoffset);
 
 	await searchState.setSearchPrompt(state.search)
 	await searchState.search(guildState.guildId)

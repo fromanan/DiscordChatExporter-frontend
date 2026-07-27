@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { Message } from "../../js/interfaces";
+    import type { InvitePreview, Message } from "../../js/interfaces";
     import MessageSystemNotification from "./MessageSystemNotification.svelte";
     import MessageOrdinary from "./MessageOrdinary.svelte";
     import { MessageType } from "./messageEnums";
@@ -45,16 +45,23 @@
             return systemNotificationTypes.includes(messageType)
         }
 
-        function inviteIds(messageContent: string): string[] {
-            const inviteRegex = /(https?:\/\/)?(www\.)?((discordapp\.com\/invite)|(discord\.gg))\/(\w+)/
-            let ids = []
-            let match = messageContent.match(inviteRegex)
-            while (match) {
-                ids.push(match[6])
-                messageContent = messageContent.replace(match[0], "")
-                match = messageContent.match(inviteRegex)
+        function invitePreviews(message: Message): InvitePreview[] {
+            const inviteRegex = /(?:https?:\/\/)?(?:www\.)?(?:discord(?:app)?\.com\/invite|discord\.gg)\/([\w-]+)/gi;
+            const archivedInvites = new Map(
+                (message.invites ?? []).map(invite => [invite.code, invite])
+            );
+            const previews: InvitePreview[] = [];
+            const seen = new Set<string>();
+
+            for (const match of message.content[0].content.matchAll(inviteRegex)) {
+                const code = match[1];
+                if (!seen.has(code)) {
+                    previews.push(archivedInvites.get(code) ?? { code });
+                    seen.add(code);
+                }
             }
-            return ids
+
+            return previews;
         }
 
         /**
@@ -114,6 +121,17 @@
             return true;
         }
 
+        function hasMedia(message: Message | null): boolean {
+            return Boolean(
+                message &&
+                (
+                    (message.attachments?.length ?? 0) > 0 ||
+                    (message.embeds?.length ?? 0) > 0 ||
+                    (message.stickers?.length ?? 0) > 0
+                )
+            );
+        }
+
         function messageContentIsLink(messageContent: string): boolean {
             const regex = /^https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$/g
             return regex.test(messageContent)
@@ -140,11 +158,14 @@
             get isSystemNotification(): boolean {
                 return isSystemNotification(message.type)
             },
-            get inviteIds(): string[] {
-                return inviteIds(message.content[0].content)
+            get invites(): InvitePreview[] {
+                return invitePreviews(message)
             },
             get shouldMerge(): boolean {
                 return shouldMerge(previousMessage, message)
+            },
+            get followsMedia(): boolean {
+                return shouldMerge(previousMessage, message) && hasMedia(previousMessage)
             },
             get messageContentIsLink(): boolean {
                 return messageContentIsLink(message.content[0].content)
@@ -181,7 +202,7 @@
 
 <MesssageSpoilerHandler>
 
-    <div class="message" class:jumpable={showJump} class:notgrouped={!messageState.shouldMerge} data-id={message._id} class:ismobile={layoutState.mobile}>
+    <div class="message" class:jumpable={showJump} class:notgrouped={!messageState.shouldMerge} class:followsmedia={messageState.followsMedia} data-id={message._id} class:ismobile={layoutState.mobile}>
         <button class="jump-btn" type="button" onclick={jumpToMessage}>Jump</button>
         {#if message.type == "24"}
             <MessageAutoModerationAction message={message} messageState={messageState} />
@@ -199,12 +220,16 @@
 
 <style>
     .message {
-        margin-top: 5px;
+        margin-top: 4px;
         padding: 0 20px;
         position: relative;
 
         &.notgrouped {
             margin-top: 17px;
+        }
+
+        &.followsmedia {
+            margin-top: 5px;
         }
 
         .jump-btn {

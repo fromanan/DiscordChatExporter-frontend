@@ -2,6 +2,7 @@
 	import { onMount } from "svelte";
     import { checkUrl, humanFileSize } from "../../js/helpers";
     import type { Asset } from "../../js/interfaces";
+	import MediaArchiveIndicator from "./MediaArchiveIndicator.svelte";
 
 	interface MyProps {
         attachment: Asset;
@@ -54,39 +55,42 @@
 	const DOWNLOAD_ICON = `<svg aria-hidden="true" role="img" width="24" height="24" fill="none" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a1 1 0 0 1 1 1v10.59l3.3-3.3a1 1 0 1 1 1.4 1.42l-5 5a1 1 0 0 1-1.4 0l-5-5a1 1 0 1 1 1.4-1.42l3.3 3.3V3a1 1 0 0 1 1-1ZM3 20a1 1 0 1 0 0 2h18a1 1 0 1 0 0-2H3Z" class=""></path></svg>`
 </script>
 
-{#if isError}
-	<p class="error">{attachment.filenameWithoutHash} - Error loading attachment txt preview</p>
-{:else if messageContent == null}
-	<p class="loading">{attachment.filenameWithoutHash} - Loading attachment txt preview...</p>
-{:else}
-	<div class="wrapper">
-		{#if isExpanded}
-			<pre class="message-txt">{messageExpanded}</pre>
-		{:else}
-			<pre class="message-txt">{messagePreview}</pre>
-		{/if}
-		<div class="footer">
-			{#if canExpand}
-				<button class="footer-expandcollapse" onclick={()=>isExpanded = !isExpanded}>
-					{#if isExpanded}
-						{@html CHEVRON_ICON_UP} <span>Collapse</span>
-					{:else}
-						{@html CHEVRON_ICON_DOWN} <span>Expand</span>
-					{/if}
-				</button>
+<div class="archive-indicator-wrapper">
+	<MediaArchiveIndicator asset={attachment} />
+	{#if isError}
+		<p class="error">{attachment.filenameWithoutHash} - Error loading attachment txt preview</p>
+	{:else if messageContent == null}
+		<p class="loading">{attachment.filenameWithoutHash} - Loading attachment txt preview...</p>
+	{:else}
+		<div class="wrapper">
+			{#if isExpanded}
+				<pre class="message-txt">{messageExpanded}</pre>
 			{:else}
-				<div></div>
+				<pre class="message-txt">{messagePreview}</pre>
 			{/if}
-			<div class="footer-right">
-				<div>{attachment.filenameWithoutHash}</div>
-				<div class="filesize">{humanFileSize(attachment.sizeBytes, 0)}</div>
-				<a href={checkUrl(attachment)} target="_blank" rel="noreferrer">
-					<div>{@html DOWNLOAD_ICON}</div>
-				</a>
+			<div class="footer">
+				{#if canExpand}
+					<button class="footer-expandcollapse" onclick={()=>isExpanded = !isExpanded}>
+						{#if isExpanded}
+							{@html CHEVRON_ICON_UP} <span>Collapse</span>
+						{:else}
+							{@html CHEVRON_ICON_DOWN} <span>Expand</span>
+						{/if}
+					</button>
+				{:else}
+					<div></div>
+				{/if}
+				<div class="footer-right">
+					<div>{attachment.filenameWithoutHash}</div>
+					<div class="filesize">{humanFileSize(attachment.sizeBytes, 0)}</div>
+					<a href={checkUrl(attachment)} target="_blank" rel="noreferrer">
+						<div>{@html DOWNLOAD_ICON}</div>
+					</a>
+				</div>
 			</div>
 		</div>
-	</div>
-{/if}
+	{/if}
+</div>
 
 
 
@@ -98,6 +102,11 @@
 	.loading {
 		color: #b5bac1;
 		font-size: 14px;
+	}
+
+	.archive-indicator-wrapper {
+		position: relative;
+		max-width: 550px;
 	}
 
 	.wrapper {

@@ -1,5 +1,6 @@
 <script lang="ts">
     import Image from '../imagegallery/Image.svelte';
+    import { getEmojiFallbackText, getEmojiImageUrl } from '../../js/emojis/emojiAssets';
     import { onUserRightClick } from './messageRightClick';
 	export let reactions
 
@@ -22,13 +23,20 @@
         <div class="reactions-modal-content" on:click|stopPropagation>
             <div class="reactions-list">
                 {#each reactions as reaction}
+                    {@const emojiImageUrl = getEmojiImageUrl(reaction.emoji)}
                     <div class="reaction" title=":{reaction.emoji.name}:" on:click={()=>viewReactions(reaction)} class:active={reaction.emoji._id == activeReaction?.emoji._id}>
-                        <Image
-                            class="global-reaction-emoji-img"
-                            alt={reaction.emoji.name}
-                            asset={reaction.emoji?.image}
-                            clickable={reaction.emoji._id == activeReaction?.emoji._id}
-                        />
+                        {#if emojiImageUrl}
+                            <img
+                                class="global-reaction-emoji-img"
+                                alt={`:${reaction.emoji.name}:`}
+                                title={`:${reaction.emoji.name}:`}
+                                src={emojiImageUrl}
+                            />
+                        {:else}
+                            <span class="global-reaction-emoji-text" title={`:${reaction.emoji.name}:`}>
+                                {getEmojiFallbackText(reaction.emoji)}
+                            </span>
+                        {/if}
                         <span class="reaction-count">{reaction.count}</span>
                     </div>
                 {/each}
@@ -143,6 +151,12 @@
         height: auto;
         cursor: pointer;
         box-sizing: content-box;
+    }
+
+    .global-reaction-emoji-text {
+        width: 32px;
+        padding: 0 8px 0 4px;
+        text-align: center;
     }
 
     .reaction-users {

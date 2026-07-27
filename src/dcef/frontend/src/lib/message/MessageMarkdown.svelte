@@ -1,16 +1,24 @@
 <script lang="ts">
     import { online } from "../../js/stores/settingsStore.svelte";
-    import type { Channel, Emoji, Role } from "../../js/interfaces";
+    import type { Author, Channel, Emoji, Mention, Role } from "../../js/interfaces";
     import { parseMarkdown } from "../../js/markdownParser";
+    import { replaceUnicodeEmojis } from "../../js/emojis/emojiAssets";
+    import { fetchUserProfile } from "../../js/stores/api";
+    import { getGuildState } from "../../js/stores/guildState.svelte";
+    import { getViewUserState } from "../viewuser/viewUserState.svelte";
 
     export let content: string
     export let emotes: Emoji[] = []
-    export let mentions: any[] = []
+    export let mentions: Mention[] = []
     export let roles: Role[] = []
     export let channels: Channel[] = []
+    export let timestampEdited: string | null = null
+    export let isDeleted = false
 
     let processedHtml: string = ''
     let processedTree: any = {}
+    const guildState = getGuildState()
+    const viewUserState = getViewUserState()
 
 
     // parse search terms from search prompt
@@ -52,7 +60,8 @@
         return false
     }
 
-    let bigEmojis = messageContainsOnlyEmojis(content)
+    $: displayContent = replaceUnicodeEmojis(content)
+    $: bigEmojis = messageContainsOnlyEmojis(displayContent)
 
     async function process(content: string, isOnline): void {
         // TEST STRING (uncomment to test formatter):
@@ -71,11 +80,62 @@
         processedHtml = parsed.html
     }
 
-    $: process(content, $online)
+    $: process(displayContent, $online)
+
+    async function showMentionProfile(event: MouseEvent) {
+        const target = (event.target as Element | null)?.closest<HTMLElement>(".message-user-mention")
+        if (!target) {
+            return
+        }
+
+        event.preventDefault()
+        event.stopPropagation()
+
+        const userId = target.dataset.userid?.padStart(24, "0")
+        if (!userId) {
+            return
+        }
+
+        const anchorRect = target.getBoundingClientRect()
+        const boundaryRect = target.closest(".scroll-container")?.getBoundingClientRect() ?? null
+        const mention = mentions.find(mention => mention._id === userId)
+        const guildId = guildState.guildId
+        const archivedAuthor = guildId ? await fetchUserProfile(guildId, userId) : null
+        const fallbackAuthor: Author = {
+            _id: userId,
+            name: mention?.name ?? userId,
+            nickname: mention?.nickname ?? mention?.name ?? userId,
+            discriminator: mention?.discriminator,
+            color: "",
+            isBot: mention?.isBot ?? false,
+            avatar: null,
+            roles: undefined,
+        }
+
+        viewUserState.setUser(
+            archivedAuthor ?? fallbackAuthor,
+            anchorRect,
+            boundaryRect,
+        )
+    }
 </script>
 
 
-<span class:onlyemojis={bigEmojis} class:smallemojis={!bigEmojis} class="message-markdown">{@html processedHtml}</span>
+<span
+    class:onlyemojis={bigEmojis}
+    class:smallemojis={!bigEmojis}
+    class:has-status={timestampEdited !== null || isDeleted}
+    class="message-markdown"
+    on:click={showMentionProfile}
+>
+    {@html processedHtml}
+    {#if timestampEdited !== null}
+        <span class="edited-or-deleted" title={timestampEdited}>(edited)</span>
+    {/if}
+    {#if isDeleted}
+        <span class="edited-or-deleted">(deleted)</span>
+    {/if}
+</span>
 
 
 <style>
@@ -88,6 +148,15 @@
         -moz-hyphens: auto;
         -webkit-hyphens: auto;
         hyphens: auto;
+    }
+    :global(.message-markdown.has-status > .paragraph:last-of-type) {
+        display: inline;
+    }
+    .edited-or-deleted {
+        margin-left: 0.15rem;
+        color: #a3a6aa;
+        font-size: 0.75rem;
+        font-weight: 500;
     }
     :global(.message-markdown pre) {
         margin: 6px 0 0 0;
@@ -157,6 +226,10 @@
         padding: 0 2px;
         word-break: break-all;
         text-decoration: none !important;
+        font: inherit;
+        line-height: inherit;
+        border: 0;
+        cursor: pointer;
     }
     :global(.message-mention:hover),
     :global(a.message-mention:hover) {

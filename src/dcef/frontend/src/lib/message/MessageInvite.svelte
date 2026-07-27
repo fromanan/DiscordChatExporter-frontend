@@ -1,144 +1,275 @@
 <script lang="ts">
-    import { getLayoutState } from "../../js/stores/layoutState.svelte";
+    import type { Guild, InvitePreview } from "../../js/interfaces";
+    import { getGuildState } from "../../js/stores/guildState.svelte";
     import Icon from "../icons/Icon.svelte";
 
-	interface MyProps {
-        inviteId: string;
+    interface MyProps {
+        invite: InvitePreview;
     }
-    let { inviteId }: MyProps = $props();
-    let inviteLink = `https://discord.gg/${inviteId}`;
 
-    const layoutState = getLayoutState()
+    let { invite }: MyProps = $props();
+    const guildState = getGuildState();
 
-    let w = $state(0);
-    let isMobile = $derived(w < 400);
+    let inviteLink = $derived(`https://discord.gg/${invite.code}`);
+    let archivedGuildId = $derived(invite.guildId?.padStart(24, "0"));
+    let isUnindexedName = $derived(!invite.name?.trim() && !invite.guildId);
+    let isServerUnavailable = $derived(
+        !archivedGuildId
+        || !guildState.guilds.some((guild: Guild) => guild._id === archivedGuildId)
+    );
+    let serverName = $derived(
+        invite.name?.trim() || (invite.guildId ? `Server ${invite.guildId}` : "Unindexed Server")
+    );
+    let description = $derived(
+        invite.description?.trim() || "This server has not been indexed"
+    );
+
+    async function goToServer(): Promise<void> {
+        if (!archivedGuildId || isServerUnavailable) {
+            return;
+        }
+
+        await guildState.changeGuildId(archivedGuildId);
+        await guildState.pushState();
+    }
+
+    function formatCount(count: number | null | undefined): string {
+        return count == null ? "-" : count.toLocaleString();
+    }
+
+    function formatCreatedAt(value: string | null | undefined): string {
+        if (!value) {
+            return "Est. -";
+        }
+
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+            return "Est. -";
+        }
+
+        return `Est. ${new Intl.DateTimeFormat(undefined, {
+            month: "short",
+            year: "numeric"
+        }).format(date)}`;
+    }
 </script>
 
-
-<div class="invite" bind:clientWidth={w}>
-    <div class="invite-title">You've been invited to join a server</div>
-    <div class="invite-content-row">
-        <div class="invite-guild-icon">
-            <Icon name="dcef/filled" width={30} />
-        </div>
-        <div class="text-col">
-            <a class="guild-name" target="_blank" href={inviteLink}>Unknown Server</a>
-            <div class="invite-status-wrapper">
-                <div class="green-circle"></div>
-                <div class="status-text" style="margin-right: 7px;">N/A Online</div>
-                <div class="gray-circle"></div>
-                <div class="status-text">N/A Members</div>
-            </div>
-        </div>
-        {#if !isMobile}
-            <div class="spacer"></div>
-            <a class="join-btn" target="_blank" href={inviteLink}>Join</a>
+<article class="invite-card">
+    <div class="server-header" class:flat-header={!invite.banner?.path}>
+        {#if invite.banner?.path}
+            <img src={invite.banner.path} alt="" />
         {/if}
     </div>
-    {#if isMobile}
-        <a class="join-btn join-btn-mobile" target="_blank" href={inviteLink}>Join</a>
-    {/if}
 
-</div>
+    <div class="server-icon">
+        {#if invite.icon?.path}
+            <img src={invite.icon.path} alt="" />
+        {:else}
+            <Icon name="dcef/filled" width={33} />
+        {/if}
+    </div>
+
+    <div class="invite-body">
+        <a class="server-name" target="_blank" rel="noreferrer" href={inviteLink}>
+            {#if isUnindexedName}
+                <em>{serverName}</em>
+            {:else}
+                {serverName}
+            {/if}
+        </a>
+
+        <div class="server-counts" aria-label="Server membership">
+            <span class="count">
+                <span class="status-dot online"></span>
+                {formatCount(invite.onlineCount)} Online
+            </span>
+            <span class="count">
+                <span class="status-dot members"></span>
+                {formatCount(invite.memberCount)} Members
+            </span>
+        </div>
+
+        <div class="creation-date">{formatCreatedAt(invite.createdAt)}</div>
+        <p class="description">{description}</p>
+
+        {#if isServerUnavailable}
+            <button
+                class="join-button unavailable"
+                type="button"
+                title={`Server Id: ${invite.guildId?.trim() || "Unknown"}`}
+                disabled
+            >
+                Server Unavailable
+            </button>
+        {:else}
+            <button class="join-button" type="button" onclick={goToServer}>
+                Go to Server
+            </button>
+        {/if}
+    </div>
+</article>
 
 <style>
-    .invite {
-        background-color: #2B2D31;
-        padding: 16px;
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-        max-width: 400px;
-        width: 100%;
-        box-sizing: border-box;
-    }
-    .invite-title {
-        font-weight: 700;
-        white-space: nowrap;
-        text-overflow: ellipsis;
+    .invite-card {
+        position: relative;
+        width: min(339px, 100%);
         overflow: hidden;
-        text-transform: uppercase;
-        font-size: 12px;
-        color: #A9BAC1;
+        box-sizing: border-box;
+        border: 1px solid #202225;
+        border-radius: 17px;
+        background: #36373f;
+        color: #f2f3f5;
     }
-    .invite-content-row {
-        display: flex;
-        gap: 16px;
-        align-items: center;
+
+    .server-header {
+        width: 100%;
+        height: 81px;
+        overflow: hidden;
+        background: #171717;
     }
-    .invite-guild-icon {
-        width: 50px;
-        height: 50px;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        background-color: #5D6BEE;
-        border-radius: 25%;
-        padding: 5px;
+
+    .server-header.flat-header {
+        background: linear-gradient(135deg, #202225, #111214);
     }
-    .text-col {
-        display: flex;
-        flex-direction: column;
-        gap: 5px;
+
+    .server-header img {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: cover;
     }
-    .guild-name {
-        font-size: 16px;
+
+    .server-icon {
+        position: absolute;
+        top: 43px;
+        left: 18px;
+        width: 72px;
+        height: 72px;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        box-sizing: border-box;
+        border: 4px solid #36373f;
+        border-radius: 21px;
+        background: #5865f2;
         color: white;
-        font-weight: 600;
+    }
+
+    .server-icon img {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: cover;
+    }
+
+    .invite-body {
+        padding: 47px 18px 18px;
+    }
+
+    .server-name {
+        display: block;
+        overflow-wrap: anywhere;
+        color: #f2f3f5;
+        font-size: 18px;
+        font-weight: 700;
+        line-height: 1.2;
         text-decoration: none;
     }
-    .guild-name:hover {
+
+    .server-name:hover {
         text-decoration: underline;
     }
 
-    .invite-status-wrapper {
+    .server-counts {
         display: flex;
-        gap: 5px;
+        flex-wrap: wrap;
+        gap: 4px 7px;
+        margin-top: 4px;
+        color: #c4c7ce;
+        font-size: 13px;
+        line-height: 1.35;
+    }
+
+    .count {
+        display: inline-flex;
         align-items: center;
+        gap: 5px;
     }
 
-    .green-circle {
-        width: 8px;
-        height: 8px;
-        background-color: #56A15D;
-        border-radius: 50%;
-    }
-    .gray-circle {
-        width: 8px;
-        height: 8px;
-        background-color: #81848D;
+    .status-dot {
+        width: 9px;
+        height: 9px;
+        flex: 0 0 auto;
         border-radius: 50%;
     }
 
-    .status-text {
-        font-size: 14px;
-        color: #b6bac1;
+    .status-dot.online {
+        background: #23a55a;
     }
 
-    .spacer {
-        flex: 1;
+    .status-dot.members {
+        background: #aeb1b8;
     }
 
-    .join-btn {
-        background-color: #457D49;
-        color: white;
-        border-radius: 3px;
-        max-width: 73px;
+    .creation-date {
+        margin-top: 2px;
+        color: #c4c7ce;
+        font-size: 13px;
+        line-height: 1.35;
+    }
+
+    .description {
+        margin: 11px 0 0;
+        overflow-wrap: anywhere;
+        color: #d1d3d7;
+        font-size: 13px;
+        line-height: 1.4;
+    }
+
+    .join-button {
         width: 100%;
-        height: 40px;
-        font-size: 14px;
-        cursor: pointer;
-        font-weight: 500;
-        text-decoration: none;
-
+        min-height: 35px;
+        margin-top: 18px;
         display: grid;
         place-items: center;
-    }
-    .join-btn:hover {
-        background-color: #346036;
-    }
-    .join-btn-mobile {
-        max-width: 100%;
+        box-sizing: border-box;
+        border: 0;
+        border-radius: 7px;
+        background: #0a984f;
+        color: white;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 700;
+        text-decoration: none;
+        cursor: pointer;
+        transition: background-color 120ms ease;
     }
 
+    .join-button:hover {
+        background: #087f43;
+    }
+
+    .join-button.unavailable,
+    .join-button.unavailable:hover {
+        background: #4e5058;
+        color: #b5bac1;
+        cursor: not-allowed;
+    }
+
+    @media (max-width: 520px) {
+        .invite-card {
+            border-radius: 12px;
+        }
+
+        .server-name {
+            font-size: 16px;
+        }
+
+        .server-counts,
+        .creation-date,
+        .description,
+        .join-button {
+            font-size: 12px;
+        }
+    }
 </style>

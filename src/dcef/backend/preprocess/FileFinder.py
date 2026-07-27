@@ -18,6 +18,8 @@ class FileFinder():
 		directory = self.base_directory
 		files = []
 		for filename in glob.glob(directory + '**/*.json', recursive=True, include_hidden=True):
+			if '/.dcef/' in self.normalize_path(filename):
+				continue
 			if filename.endswith('.json'):
 				# ignore attachment files - they are made by users, not DiscordChatExporter
 				if re.search(r"-([a-fA-F0-9]{5}|[a-f0-9]{16})\.json$", filename) != None:
@@ -47,6 +49,8 @@ class FileFinder():
 		regex_pattern = re.compile(r'.+(\-|\/)(?:[a-fA-F0-9]{5}|[a-fA-F0-9]{16})(?:\..+)?$')
 		for path in glob.glob(input_directory + '**/*', recursive=True, include_hidden=True):
 			path = path.replace('\\', '/')
+			if '/.dcef/' in path:
+				continue
 			if regex_pattern.match(path):
 				filename = os.path.basename(path)
 				all_files[filename] = path

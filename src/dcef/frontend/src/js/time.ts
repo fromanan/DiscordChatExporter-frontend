@@ -57,6 +57,52 @@ export function renderTimestamp(date) {
     return renderDate(date) + ' ' + renderTime(date);
 }
 
+export function renderFullTimestamp(date: string) {
+    const parsedDate = new Date(date);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+        return renderTimestamp(date);
+    }
+
+    try {
+        return new Intl.DateTimeFormat(get(locale), {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+        }).format(parsedDate);
+    }
+    catch {
+        return renderTimestamp(date);
+    }
+}
+
+export function renderMessageTimestamp(date: string, now = new Date()) {
+    const activeLocale = get(locale);
+    const messageMoment = moment(date).locale(activeLocale);
+
+    if (!messageMoment.isValid()) {
+        return renderTimestamp(date);
+    }
+
+    const daysAgo = moment(now).locale(activeLocale).startOf('day').diff(messageMoment.clone().startOf('day'), 'days');
+    const twelveHourTime = messageMoment.format('h:mm A');
+
+    if (daysAgo === 0) {
+        return twelveHourTime;
+    }
+    if (daysAgo === 1) {
+        return `Yesterday at ${twelveHourTime}`;
+    }
+    if (daysAgo >= 2 && daysAgo <= 6) {
+        return `Last ${messageMoment.format('dddd')} at ${twelveHourTime}`;
+    }
+
+    return messageMoment.format('L');
+}
+
 
 // (modified) https://github.com/vegeta897/snow-stamp/blob/4803e7889da524b8c83bc2d72882b82f02622662/src/convert.js#L1-L9
 // Converts a snowflake ID string into a JS Date object using the Discord's epoch (in ms)

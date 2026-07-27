@@ -5,8 +5,19 @@
     interface MyProps {
         images: Asset[];
         isAttachment: boolean;
+        onmediastatus?: (asset: Asset, status: "loaded" | "failed") => void;
+        messageId?: string;
+        mediaKind?: string;
     }
-    let { images, isAttachment}: MyProps = $props();
+    let { images, isAttachment, onmediastatus = undefined, messageId = undefined, mediaKind = undefined}: MyProps = $props();
+
+    function getAspectRatio(image: Asset): string | undefined {
+        if (!image.width || !image.height) {
+            return undefined;
+        }
+
+        return `${image.width} / ${image.height}`;
+    }
 
     let groupedImageAttachments = $derived.by(() => {
 		if (images.length == 0) {
@@ -57,7 +68,19 @@
     {#each groupedImageAttachments as imageGroup}
         <div class="image-row" >
             {#each imageGroup as image}
-                <Image assets={images} asset={image} class="global-tiledimage {(imageGroup.length > 1 || images.length == 3) ? 'global-setaspectratio' : ''}" />
+                <Image
+                    assets={images}
+                    asset={image}
+                    aspectRatio={getAspectRatio(image)}
+                    reserveSpace={true}
+                    fillContainer={imageGroup.length > 1 || images.length == 3}
+                    showCloudIndicator={true}
+                    {messageId}
+                    {mediaKind}
+                    class="global-tiledimage {(imageGroup.length > 1 || images.length == 3) ? 'global-setaspectratio' : ''}"
+                    onload={() => onmediastatus?.(image, "loaded")}
+                    onerror={() => onmediastatus?.(image, "failed")}
+                />
             {/each}
         </div>
     {/each}
@@ -68,6 +91,7 @@
 
     .images {
         border-radius: 8px;
+		max-width: min(550px, 100%);
         .image-row {
             display: grid;
             grid-auto-columns: minmax(0, 1fr);
@@ -86,7 +110,7 @@
     }
 
     .images > .image-row > :global(.global-tiledimage.global-setaspectratio) {
-        aspect-ratio: 1 / 1;
+        min-width: 0;
     }
 
     /*
@@ -105,7 +129,7 @@
     .images.images3 {
         display: flex;
         gap: 4px;
-        max-width: 550px;
+        max-width: min(550px, 100%);
 
         .image-row {
             display: flex;
@@ -122,8 +146,30 @@
     }
 
     /* render image inline if it is the only image and it is an attachment */
+    .images.inline {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .images.inline .image-row {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .inline > .image-row > :global(.global-tiledimage) {
+        display: inline-block;
+        width: auto;
+        max-width: 100%;
+        margin-inline: 0 auto;
+        vertical-align: top;
+    }
+
     .inline :global(img) {
         max-width: 100%;
+        max-height: 400px;
         width: auto;
+        height: auto;
+        object-fit: contain;
     }
 </style>

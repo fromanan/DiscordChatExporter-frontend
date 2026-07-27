@@ -6,6 +6,11 @@
     import Icon from "../icons/Icon.svelte";
 
 	let { category } = $props();
+    let categoryName = $derived(
+        typeof category.name === "string" && category.name.trim().length > 0
+            ? category.name.trim()
+            : "Category"
+    )
 
 	let isOpen = $state(function() {
         /** returns true if category is not closed */
@@ -62,11 +67,11 @@
 </script>
 
 
-<div class="category" on:click={toggle} on:contextmenu|preventDefault={(e) => onCategoryRightClick(e, category._id, category.name)}>
+<div class="category" on:click={toggle} on:contextmenu|preventDefault={(e) => onCategoryRightClick(e, category._id, categoryName)}>
+    <span title="{category.msg_count} messages">{categoryName}</span>
     <div  class="icon-dropdown {isOpen? '' : 'rotate'}">
-		<Icon name="other/dropdown" width={13} />
+		<Icon name="other/dropdown" width={12.5} />
 	</div>
-    <span title="{category.msg_count} messages">{category.name}</span>
 </div>
 {#each category.channels as channel}
     {#if isOpen || channel._id == guildState.channelId}
@@ -79,21 +84,24 @@
 	.category {
 		display: flex;
 		align-items: center;
-		font-size: 12px;
-		text-transform: uppercase;
+		font-size: 13px;
+        line-height: 18px;
 		color: #80848E;;
 		cursor: pointer;
         user-select: none;
 		letter-spacing: 0.24px;
 
-        margin: 16px 0px 0px 0px;
+        min-height: 24px;
+        margin: 8px 0 0;
+        padding: 3px 16px;
         font-weight: 600;
 	}
     .category:hover {
         color: #DBDEE1;
     }
     .icon-dropdown {
-		margin-right: 2px;
+		margin-left: 4px;
+        flex: 0 0 12.5px;
         transition: transform 0.2s ease-in-out;
     }
 	.icon-dropdown.rotate {

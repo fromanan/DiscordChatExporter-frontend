@@ -217,6 +217,31 @@ docker volume rm dcef_cache
 
 ### 4. Run DCEF
 
+#### Live-updating exports
+
+This checkout can watch JSON files that are updated in place. Set
+`DCEF_EXPORTS_DIR` before starting DCEF to use an export directory outside the
+usual `exports/` folder, and optionally set the polling interval:
+
+```powershell
+$env:DCEF_EXPORTS_DIR = 'C:\DiscordArchive\dce-live'
+$env:DCEF_WATCH_INTERVAL_SECONDS = '5'
+.\src\RUN_DEV.bat
+```
+
+On Windows, the development launcher stores MongoDB data under
+`%DCEF_EXPORTS_DIR%\.dcef\mongodb` when the configured exports directory exists,
+is writable, and is on an NTFS/ReFS volume. It falls back to
+`%LOCALAPPDATA%\DCEF\mongodb` otherwise. MongoDB's WiredTiger storage cannot use
+an exFAT checkout such as `K:`. Set `DCEF_MONGODB_PATH` before launching to
+override both defaults.
+
+The preprocessor compares each file's size and modification timestamp with the
+last completed import. Changed files are reprocessed, then an archive revision
+is published through the API. An open frontend checks that revision every five
+seconds and reloads only after the new data is ready. Producers should replace
+JSON files atomically to prevent incomplete imports.
+
 <details><summary><b>I am using Windows</b></summary>
 
 1. Run `dcef.exe`

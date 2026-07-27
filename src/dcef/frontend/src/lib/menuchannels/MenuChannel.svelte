@@ -67,8 +67,8 @@
 
 <div class="channel" class:selected={guildState.channelId == channel._id} on:click={toggle} on:contextmenu|preventDefault={(e) => onChannelRightClick(e, channel._id, channel.name)}>
     <div class="channel-icon">
-        <ChannelIcon channel={channel} width={20} />
-    </div><span title="{channel.msg_count} messages">{channel.name}</span>
+        <ChannelIcon channel={channel} width={16} />
+    </div><span title="{channel.name} ({channel.msg_count} messages)">{channel.name}</span>
 </div>
 {#each channel.threads as thread}
     {#if isOpen || thread._id == guildState.threadId}
@@ -81,13 +81,17 @@
 		display: flex;
 		align-items: center;
 		border-radius: 4px;
-		width: calc(100% - 40x);
-		padding: 4px 6px;
+		width: calc(100% - 16px);
+        height: 34px;
+		padding: 7px 10px;
 		margin: 1px 8px;
-        gap: 5px;
+        gap: 6px;
+        font-size: 14px;
+        line-height: 18px;
         color: #949BA4;
         cursor: pointer;
         font-weight: 500;
+        min-width: 0;
 	}
 
 	.channel:hover,
@@ -97,7 +101,14 @@
 	}
 
 	.channel-icon {
-		width: 24px;
-		margin-right: 5px;
+		flex: 0 0 20px;
+		width: 20px;
+	}
+
+    .channel > span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
 	}
 </style>
