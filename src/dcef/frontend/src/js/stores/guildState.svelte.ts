@@ -3,6 +3,7 @@ import { isObjectEqual } from "../helpers";
 import { fetchCategoriesChannelsThreads, fetchGuilds } from "./api";
 import { getLayoutState } from "./layoutState.svelte";
 import type { Category, Channel, Guild } from "../interfaces";
+import { normalizeViewerGuildId } from "../discordIds";
 
 let guilds: Guild[] = $state(await fetchGuilds());
 let guildId: string | null = $state("nonExistingGuildId");  // will be changed before the first load
@@ -91,8 +92,6 @@ export function getGuildState() {
 
 	function getUrlState() {
 		const urlParams = new URLSearchParams(window.location.search)
-		const normalizeDiscordId = (value: string) =>
-			/^\d+$/.test(value) ? value.padStart(24, "0") : value
 		const parseOffset = (name: string) => {
 			const value = urlParams.get(name)
 			if (value === null) {
@@ -114,10 +113,10 @@ export function getGuildState() {
 
 		const pathParts = window.location.pathname.split("/").filter(Boolean)
 		if (pathParts[0] === "channels" && (pathParts.length === 3 || pathParts.length === 4)) {
-			state.guild = normalizeDiscordId(decodeURIComponent(pathParts[1]))
-			state.channel = normalizeDiscordId(decodeURIComponent(pathParts[2]))
+			state.guild = normalizeViewerGuildId(decodeURIComponent(pathParts[1]))
+			state.channel = normalizeViewerGuildId(decodeURIComponent(pathParts[2]))
 			state.message = pathParts.length === 4
-				? normalizeDiscordId(decodeURIComponent(pathParts[3]))
+				? normalizeViewerGuildId(decodeURIComponent(pathParts[3]))
 				: "last"
 			state.thread = null
 			state.threadmessage = pathParts.length === 4

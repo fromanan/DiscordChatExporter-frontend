@@ -1,4 +1,9 @@
-import type { Author, Category, Channel, Guild } from "../interfaces";
+import type { Author, Category, Channel, Guild, Role } from "../interfaces";
+import {
+    DIRECT_MESSAGE_GUILD_ID,
+    LAST_MESSAGE_CURSOR,
+    normalizeDiscordId
+} from "../discordIds";
 
 const ARCHIVE_API_BASE_URL = import.meta.env.VITE_ARCHIVE_API_BASE_URL ?? "http://127.0.0.1:5178/api/v1";
 const emptyMessagePage = () => ({
@@ -13,6 +18,13 @@ function requireOk(response: Response): Response {
         throw new Error(`Archive API returned ${response.status} ${response.statusText}`);
     }
     return response;
+}
+
+function archiveApiId(value: string): string {
+    if (value === DIRECT_MESSAGE_GUILD_ID) {
+        return value
+    }
+    return normalizeDiscordId(value)
 }
 
 export type OfflineMediaArchiveResult = "succeeded" | "persisted-view-update-deferred" | "pending" | "failed";
@@ -111,7 +123,7 @@ export async function fetchArchiveRevision(): Promise<number | null> {
 export async function fetchUserProfile(guildId: string, userId: string): Promise<Author | null> {
     try {
         const response = await fetch(
-            `/api/guild/user?guild_id=${encodeURIComponent(guildId)}&user_id=${encodeURIComponent(userId)}`)
+            `${ARCHIVE_API_BASE_URL}/viewer/guilds/${encodeURIComponent(archiveApiId(guildId))}/users/${encodeURIComponent(archiveApiId(userId))}`)
         if (!response.ok) {
             return null
         }
@@ -129,31 +141,18 @@ export async function fetchMessages(guildId: string | null, channelId: string, d
         return emptyMessagePage()
     }
     if (guildId === null) {
-        guildId = "000000000000000000000000"
-    }
-    if (messageId === null || messageId === "first") {
-        messageId = "000000000000000000000000"
-    }
-    else if (messageId === "last") {
-        messageId = "999999999999999999999999"
+        guildId = DIRECT_MESSAGE_GUILD_ID
     }
     try {
-        let response
-        if (direction === "first") {
-            response = await fetch(`/api/guild/messages?guild_id=${encodeURIComponent(guildId)}&channel_id=${encodeURIComponent(channelId)}&next_page_cursor=0&limit=${encodeURIComponent(limit)}`)
+        const parameters = new URLSearchParams({ limit: String(limit) })
+        if (direction === "last" || messageId === "last") {
+            parameters.set("before", LAST_MESSAGE_CURSOR)
         }
-        else if (direction === "last") {
-            response = await fetch(`/api/guild/messages?guild_id=${encodeURIComponent(guildId)}&channel_id=${encodeURIComponent(channelId)}&prev_page_cursor=999999999999999999999999&limit=${encodeURIComponent(limit)}`)
+        else if (messageId !== null && messageId !== "first" && direction !== "first") {
+            parameters.set(direction, archiveApiId(messageId))
         }
-        else if (direction === "before") {
-            response = await fetch(`/api/guild/messages?guild_id=${encodeURIComponent(guildId)}&channel_id=${encodeURIComponent(channelId)}&prev_page_cursor=${encodeURIComponent(messageId)}&limit=${encodeURIComponent(limit)}`)
-        }
-        else if (direction === "after") {
-            response = await fetch(`/api/guild/messages?guild_id=${encodeURIComponent(guildId)}&channel_id=${encodeURIComponent(channelId)}&next_page_cursor=${encodeURIComponent(messageId)}&limit=${encodeURIComponent(limit)}`)
-        }
-        else {
-            response = await fetch(`/api/guild/messages?guild_id=${encodeURIComponent(guildId)}&channel_id=${encodeURIComponent(channelId)}&around_page_cursor=${encodeURIComponent(messageId)}&limit=${encodeURIComponent(limit)}`)
-        }
+        const response = await fetch(
+            `${ARCHIVE_API_BASE_URL}/viewer/guilds/${encodeURIComponent(archiveApiId(guildId))}/channels/${encodeURIComponent(archiveApiId(channelId))}/messages?${parameters}`)
 
         requireOk(response)
         let retObj = await response.json()
@@ -248,9 +247,14 @@ export async function fetchAutocomplete(guildId: string | null, key: string, val
 
 export async function fetchGuilds(): Promise<Guild[]> {
     try {
-        const response = await fetch('/api/guilds')
+        const response = await fetch(`${ARCHIVE_API_BASE_URL}/viewer/guilds`)
         requireOk(response)
-        const guilds = await response.json()
+        const guilds: Guild[] = await response.json()
+        await Promise.all(guilds.map(async guild => {
+            guild.roles = guild._id === DIRECT_MESSAGE_GUILD_ID
+                ? []
+                : await fetchRoles(guild._id)
+        }))
         console.log("guilds", guilds);
         return guilds
         // guilds.set(response_json)
@@ -261,6 +265,22 @@ export async function fetchGuilds(): Promise<Guild[]> {
     return []
 }
 
+export async function fetchRoles(guildId: string): Promise<Role[]> {
+    if (guildId === DIRECT_MESSAGE_GUILD_ID) {
+        return []
+    }
+    try {
+        const response = await fetch(
+            `${ARCHIVE_API_BASE_URL}/viewer/guilds/${encodeURIComponent(archiveApiId(guildId))}/roles`)
+        requireOk(response)
+        return await response.json()
+    }
+    catch (e) {
+        console.error("api - Failed to fetch roles", e)
+        return []
+    }
+}
+
 function isThreadChannel(channel: Channel): boolean {
     return channel.type === "GuildNewsThread"
         || channel.type === "GuildPublicThread"
@@ -269,11 +289,12 @@ function isThreadChannel(channel: Channel): boolean {
 
 export async function fetchCategoriesChannelsThreads(guildId: string | null): Promise<Category[]> {
     if (guildId === null) {
-        guildId = "000000000000000000000000"
+        guildId = DIRECT_MESSAGE_GUILD_ID
     }
     console.log("aaaaaa fetchCategoriesChannelsThreads", guildId);
     try {
-        const response = await fetch(`/api/guild/channels?guild_id=${encodeURIComponent(guildId)}`)
+        const response = await fetch(
+            `${ARCHIVE_API_BASE_URL}/viewer/guilds/${encodeURIComponent(archiveApiId(guildId))}/channels`)
         requireOk(response)
         let json_response: Channel[] = await response.json()
         json_response = json_response.filter(channel => channel.isHidden !== true)
@@ -287,11 +308,11 @@ export async function fetchCategoriesChannelsThreads(guildId: string | null): Pr
         let categories_temp: Category[] = []
         let channels_temp: Channel[] = []
         let lost_threads: Channel[] = []
-
-
+        const ordinaryChannels = json_response.filter(channel =>
+            !isThreadChannel(channel) && channel.type !== "GuildCategory")
 
         // create categories
-        if (guildId === "000000000000000000000000") {
+        if (guildId === DIRECT_MESSAGE_GUILD_ID) {
             let category = {
                 _id: '0',
                 name: "Direct Messages",
@@ -303,9 +324,8 @@ export async function fetchCategoriesChannelsThreads(guildId: string | null): Pr
         }
         else {
             let found_categories_ids: string[] = []
-            for (let channel of json_response) {
-                if (!isThreadChannel(channel)) {
-                    if (!found_categories_ids.includes(channel.categoryId)) {
+            for (let channel of ordinaryChannels) {
+                if (!found_categories_ids.includes(channel.categoryId)) {
                         let category = {
                             _id: channel.categoryId,
                             name: channel.category,
@@ -319,32 +339,29 @@ export async function fetchCategoriesChannelsThreads(guildId: string | null): Pr
                         }
                         categories_temp.push(category)
                         found_categories_ids.push(channel.categoryId)
-                    }
-                    else {
-                        const category = categories_temp.find(candidate => candidate._id === channel.categoryId)
-                        if (category) {
-                            category.position = Math.min(
-                                category.position ?? Number.MAX_SAFE_INTEGER,
-                                channel.categoryOrder
-                                    ?? channel.categoryPosition
-                                    ?? channel.position
-                                    ?? Number.MAX_SAFE_INTEGER)
-                            category.categoryOrder ??= channel.categoryOrder
-                        }
+                }
+                else {
+                    const category = categories_temp.find(candidate => candidate._id === channel.categoryId)
+                    if (category) {
+                        category.position = Math.min(
+                            category.position ?? Number.MAX_SAFE_INTEGER,
+                            channel.categoryOrder
+                                ?? channel.categoryPosition
+                                ?? channel.position
+                                ?? Number.MAX_SAFE_INTEGER)
+                        category.categoryOrder ??= channel.categoryOrder
                     }
                 }
             }
         }
 
         // create channels (excluding threads)
-        for (let channel of json_response) {
-            if (!isThreadChannel(channel)) {
-                channel["threads"] = []
-                if (guildId === "000000000000000000000000") {
-                    channel["categoryId"] = '0'
-                }
-                channels_temp.push(channel)
+        for (let channel of ordinaryChannels) {
+            channel["threads"] = []
+            if (guildId === DIRECT_MESSAGE_GUILD_ID) {
+                channel["categoryId"] = '0'
             }
+            channels_temp.push(channel)
         }
 
         // add threads to their respective channels

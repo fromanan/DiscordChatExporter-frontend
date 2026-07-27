@@ -149,7 +149,7 @@
 
 
 <div bind:this={wrapperElement} class="spoiler-wrapper {divclass}" onclick={clickable ? viewGallery : undefined} class:clickable={clickable} class:loading={!isLoaded && !failedToLoad && !thumbnailSettled} class:failed={failedToLoad} class:fill-container={fillContainer} style:aspect-ratio={reserveSpace ? resolvedAspectRatio : undefined} style:width={reserveSpace && !fillContainer ? resolvedWidth : undefined}>
-	{#if showCloudIndicator}
+	{#if showCloudIndicator && !failedToLoad}
 		<MediaArchiveIndicator {asset} {messageId} {mediaKind} />
 	{/if}
 	<MediaLoadingSkeleton active={!isLoaded && !failedToLoad && !thumbnailSettled} />

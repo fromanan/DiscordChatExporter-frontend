@@ -73,6 +73,7 @@ export interface Channel {
 	channelOrder?: number | null;
 	isHidden?: boolean;
 	topic: string | null;
+	lastMessageId?: string | null;
 	guildId: string;
 	msg_count: number;
 	threads: Channel[];
@@ -351,7 +352,7 @@ export interface Message {
 	content: MessageContent[];
 	author: Author;
 	stickers: Sticker[] | null;
-	reactions: Emoji[] | null;
+	reactions: Reaction[] | null;
 	emotes: Reaction[] | null;   // emotes in the message
 	mentions: Mention[] | null;
 	attachments: Asset[] | null;

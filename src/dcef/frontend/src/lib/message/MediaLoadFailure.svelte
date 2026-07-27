@@ -41,7 +41,13 @@
     }
 
     .media-load-failure > :global(.icon) {
+        max-width: calc(100% - 24px);
+        max-height: calc(100% - 24px);
         opacity: 0.5;
+    }
+
+    .media-load-failure > :global(.icon svg) {
+        object-fit: contain;
     }
 
     .reload-button {

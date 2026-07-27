@@ -20,7 +20,8 @@ export function replaceUnicodeEmojis(content: string): string {
 export function getEmojiImageUrl(emoji: any): string {
     if (emoji?.source === "default") {
         const name = String(emoji?.name ?? "");
-        const key = name.startsWith(":") ? name : `:${name}:`;
+        const key = unicodeToShortcode[name]
+            ?? (name.startsWith(":") ? name : `:${name}:`);
         const filename = (twemojiToFilename as Record<string, string>)[key];
         if (filename) {
             return `/twemoji-svg/${filename}.svg`;

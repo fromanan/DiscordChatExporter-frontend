@@ -104,6 +104,19 @@ function getTwitchClipEmbed(url: URL): ExternalVideoEmbed | null {
 	};
 }
 
+export function isGyazoCaptureUrl(value: string | null | undefined): boolean {
+	const url = parseUrl(value);
+	if (!url || (url.protocol !== "https:" && url.protocol !== "http:")) {
+		return false;
+	}
+
+	const hostname = url.hostname.toLowerCase().replace(/^www\./, "");
+	const pathParts = url.pathname.split("/").filter(Boolean);
+	return hostname === "gyazo.com"
+		&& pathParts.length === 1
+		&& /^[a-f0-9]{32}$/i.test(pathParts[0]);
+}
+
 export function getExternalVideoEmbed(value: string | null | undefined): ExternalVideoEmbed | null {
 	const url = parseUrl(value);
 	if (!url || (url.protocol !== "https:" && url.protocol !== "http:")) {

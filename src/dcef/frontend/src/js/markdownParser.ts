@@ -6,6 +6,7 @@ import { checkUrl } from './helpers';
 import hljs from 'highlight.js';
 import { twemojiToFilename } from './emojis/twemojiToFilename';
 import type { Asset } from './interfaces';
+import { normalizeDiscordId } from './discordIds';
 
 export function escapeRegExp(string: string) {
     // https://stackoverflow.com/a/6969486
@@ -32,7 +33,6 @@ function isRegexValid(regex: string) {
     }
 }
 
-
 const CHANNEL_ICON = `<svg style="width: 1rem;height: 1rem;vertical-align: middle;margin-bottom: .2rem;margin-right:4px" width="24" height="24" viewBox="0 0 24 24" role="img"><path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M5.88657 21C5.57547 21 5.3399 20.7189 5.39427 20.4126L6.00001 17H2.59511C2.28449 17 2.04905 16.7198 2.10259 16.4138L2.27759 15.4138C2.31946 15.1746 2.52722 15 2.77011 15H6.35001L7.41001 9H4.00511C3.69449 9 3.45905 8.71977 3.51259 8.41381L3.68759 7.41381C3.72946 7.17456 3.93722 7 4.18011 7H7.76001L8.39677 3.41262C8.43914 3.17391 8.64664 3 8.88907 3H9.87344C10.1845 3 10.4201 3.28107 10.3657 3.58738L9.76001 7H15.76L16.3968 3.41262C16.4391 3.17391 16.6466 3 16.8891 3H17.8734C18.1845 3 18.4201 3.28107 18.3657 3.58738L17.76 7H21.1649C21.4755 7 21.711 7.28023 21.6574 7.58619L21.4824 8.58619C21.4406 8.82544 21.2328 9 20.9899 9H17.41L16.35 15H19.7549C20.0655 15 20.301 15.2802 20.2474 15.5862L20.0724 16.5862C20.0306 16.8254 19.8228 17 19.5799 17H16L15.3632 20.5874C15.3209 20.8261 15.1134 21 14.8709 21H13.8866C13.5755 21 13.3399 20.7189 13.3943 20.4126L14 17H8.00001L7.36325 20.5874C7.32088 20.8261 7.11337 21 6.87094 21H5.88657ZM9.41045 9L8.35045 15H14.3504L15.4104 9H9.41045Z"></path></svg>`;
 
 const NO_ACCESS_ICON = `<svg style="width: 1rem;height: 1rem;vertical-align: middle;margin-bottom: .2rem;margin-right:4px" width="24" height="24" viewBox="0 0 24 24" aria-label="No Access" aria-hidden="false" role="img"><path fill="currentColor" d="M17 11V7C17 4.243 14.756 2 12 2C9.242 2 7 4.243 7 7V11C5.897 11 5 11.896 5 13V20C5 21.103 5.897 22 7 22H17C18.103 22 19 21.103 19 20V13C19 11.896 18.103 11 17 11ZM12 18C11.172 18 10.5 17.328 10.5 16.5C10.5 15.672 11.172 15 12 15C12.828 15 13.5 15.672 13.5 16.5C13.5 17.328 12.828 18 12 18ZM15 11H9V7C9 5.346 10.346 4 12 4C13.654 4 15 5.346 15 7V11Z" aria-hidden="true"></path></svg>`
@@ -56,12 +56,12 @@ const newRole = {
         return /^<@&(\d{17,24})>/.exec(source);
     },
     parse: function(capture, recurseParse, state) {
-        let roleId = capture[1].toString().padStart(24, '0')
+        const roleId = normalizeDiscordId(capture[1].toString())
         let roleName = "role"
         let roleColor = "#D4E0FC"
         let backgroundColor = "#414675"
         for (const role of state.roles) {
-            if (role._id == roleId) {
+            if (normalizeDiscordId(role._id) === roleId) {
                 roleName = role.name
                 if (role.color !== null) {
                     roleColor = role.color
@@ -119,10 +119,10 @@ const newMention = {
         return /^<@!?(\d{17,24})>/.exec(source);
     },
     parse: function(capture, recurseParse, state) {
-        let mentionId = capture[1].toString().padStart(24, '0')
+        const mentionId = normalizeDiscordId(capture[1].toString())
         let mentionNickName = null
         for (const mention of state.mentions) {
-            if (mention._id == mentionId) {
+            if (normalizeDiscordId(mention._id) === mentionId) {
                 mentionNickName = mention.nickname
             }
         }
@@ -152,10 +152,10 @@ const newChannel = {
     parse: function(capture, recurseParse, state) {
         let channelName = "channel"
         let channelId = capture[1]
-        let paddedChannelId = channelId.toString().padStart(24, '0')
+        const normalizedChannelId = normalizeDiscordId(channelId.toString())
         let guildId = null
         for (const channel of state.channels) {
-            if (channel._id == paddedChannelId) {
+            if (normalizeDiscordId(channel._id) === normalizedChannelId) {
                 channelName = channel.name
                 guildId = channel.guildId
             }
@@ -163,7 +163,7 @@ const newChannel = {
         return {
             type: 'newChannel',
             channelId: channelId,
-            paddedChannelId: paddedChannelId,
+            normalizedChannelId,
             channelName: channelName,
             guildId: guildId,
         };
@@ -173,7 +173,7 @@ const newChannel = {
             return `<span class="message-mention" data-channelid="${node.channelId}">${NO_ACCESS_ICON} No Access</span>`;
         }
         else {
-            return `<a class="message-mention" onclick="window.globalSetChannel('${node.guildId}', '${node.paddedChannelId}')"  href="javascript:void(0)">${CHANNEL_ICON} ${node.channelName}</a>`;
+            return `<a class="message-mention" onclick="window.globalSetChannel('${node.guildId}', '${node.normalizedChannelId}')"  href="javascript:void(0)">${CHANNEL_ICON} ${node.channelName}</a>`;
         }
     }
 }
@@ -219,9 +219,9 @@ const messageLink = {
   parse: function(capture, recurseParse, state) {
       return {
           type: 'messageLink',
-          guildId: capture[1].toString().padStart(24, '0'),
-          channelId: capture[2].toString().padStart(24, '0'),
-          messageId: capture[3].toString().padStart(24, '0'),
+          guildId: normalizeDiscordId(capture[1].toString()),
+          channelId: normalizeDiscordId(capture[2].toString()),
+          messageId: normalizeDiscordId(capture[3].toString()),
           url: capture[0]
       };
   },
@@ -242,8 +242,8 @@ const channelLink = {
   parse: function(capture, recurseParse, state) {
       return {
           type: 'channelLink',
-          guildId: capture[1].toString().padStart(24, '0'),
-          channelId: capture[2].toString().padStart(24, '0'),
+          guildId: normalizeDiscordId(capture[1].toString()),
+          channelId: normalizeDiscordId(capture[2].toString()),
           url: capture[0]
       };
   },
@@ -386,7 +386,7 @@ const newEmoji = {
     const emojiName = capture[2]
     const emojiId = capture[3]
     let imageObj = null
-    const paddedEmojiId = emojiId.toString().padStart(24, '0')
+    const normalizedEmojiId = normalizeDiscordId(emojiId.toString())
     let url = null
     if (!state.onlyOffline) {
         // The CDN path is an image only when its format is explicit.  The
@@ -394,7 +394,7 @@ const newEmoji = {
         url = `https://cdn.discordapp.com/emojis/${emojiId}.${isAnimated ? "gif" : "png"}?size=96&quality=lossless`
     }
     for (const emote of state.emotes) {
-        if (emote._id == paddedEmojiId) {
+        if (normalizeDiscordId(emote._id) === normalizedEmojiId) {
             const newUrl = checkUrl(emote.image)
             if (newUrl !== "") {
                 url = newUrl
